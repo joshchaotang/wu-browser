@@ -59,7 +59,6 @@ export function createMcpServer(): McpServer {
     inputSchema: { url: z.string().describe('URL to navigate to') },
   }, async ({ url }) => {
     const result = await navigate(url);
-    sessionStats.actions++;
     return {
       content: [{ type: 'text', text: result.success ? `Navigated to ${result.newUrl}` : result.message }],
     };
@@ -70,7 +69,6 @@ export function createMcpServer(): McpServer {
     inputSchema: {},
   }, async () => {
     const result = await goBack();
-    sessionStats.actions++;
     return { content: [{ type: 'text', text: result.message }] };
   });
 
@@ -79,7 +77,6 @@ export function createMcpServer(): McpServer {
     inputSchema: {},
   }, async () => {
     const result = await goForward();
-    sessionStats.actions++;
     return { content: [{ type: 'text', text: result.message }] };
   });
 
@@ -125,7 +122,6 @@ export function createMcpServer(): McpServer {
     },
   }, async ({ ref }) => {
     const result = await click(ref);
-    sessionStats.actions++;
 
     let msg = result.context ?? (result.success ? `Clicked ${ref}` : result.message);
     if (result.newTabId) msg += `\n  [New tab: ${result.newTabId}]`;
@@ -143,7 +139,6 @@ export function createMcpServer(): McpServer {
     },
   }, async ({ ref, text, clear }) => {
     const result = await typeText(ref, text, { clear });
-    sessionStats.actions++;
     return { content: [{ type: 'text', text: result.context ?? result.message }] };
   });
 
@@ -155,7 +150,6 @@ export function createMcpServer(): McpServer {
     },
   }, async ({ direction, amount }) => {
     const result = await scroll(direction, amount);
-    sessionStats.actions++;
     return { content: [{ type: 'text', text: result.message }] };
   });
 
@@ -167,7 +161,6 @@ export function createMcpServer(): McpServer {
     },
   }, async ({ ref, value }) => {
     const result = await selectOption(ref, value);
-    sessionStats.actions++;
     return { content: [{ type: 'text', text: result.message }] };
   });
 
@@ -178,7 +171,6 @@ export function createMcpServer(): McpServer {
     },
   }, async ({ ref }) => {
     const result = await hover(ref);
-    sessionStats.actions++;
     return { content: [{ type: 'text', text: result.message }] };
   });
 

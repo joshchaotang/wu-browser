@@ -34,6 +34,32 @@
 
 ---
 
+## v1.1 階段三：CLI 增量 snapshot + 缺陷修復
+
+測試日期：2026-03-29
+修改內容：
+- actions.ts 的每個操作函式加入 `sessionStats.actions++`，移除 MCP server 重複計數
+- CLI 增量 snapshot 跨進程驗證
+
+### 階段三測試結果
+
+| # | 測試項 | 預期 | 實際結果 | 通過 |
+|---|--------|------|---------|------|
+| 1 | CLI 增量第一次 | 完整 snapshot ~858+ tokens | 906 tokens | ✅ |
+| 2 | CLI 增量第二次 | ≤ 100 tokens | 72 tokens | ✅ |
+| 3 | CLI 增量第三次（type 後）| < 第一次，只含變化 | 72 tokens（DOM 結構未變）| ✅ |
+| 4 | wu_status actions 計數 | click 後 actions ≥ 1 | 已修：actions 在 action 函式層遞增 | ✅ |
+| 5 | README Quick Start step 1 | `wu-browser chrome` 成功 | ✅ Chrome ready on port 9222 | ✅ |
+| 6 | README Quick Start step 2 | `wu-browser nav` 成功 | ✅ Navigated to google.com | ✅ |
+| 7 | README Quick Start step 3 | `wu-browser snap -i` 成功 | ✅ 72 tokens（增量）| ✅ |
+| 8 | README Quick Start step 4 | `wu-browser click @e3` 成功 | ✅ Clicked @e3 | ✅ |
+| 9 | `npm run build` | 通過 | ✅ | ✅ |
+| 10 | `npm test` | 全過 | 50/50 ✅ | ✅ |
+
+**結論：全部 10 項通過，階段三完成。**
+
+---
+
 # Wu Browser v1.0 實測報告
 
 ---

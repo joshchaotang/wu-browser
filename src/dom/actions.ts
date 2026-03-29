@@ -8,7 +8,7 @@
 import { getClient } from '../browser/connection.js';
 import { audit, debug } from '../utils/logger.js';
 import { listTabs } from '../browser/session.js';
-import { miniSnapshot } from './snapshot.js';
+import { miniSnapshot, sessionStats } from './snapshot.js';
 
 export interface ActionResult {
   success: boolean;
@@ -53,6 +53,7 @@ async function resolveRef(ref: string): Promise<{
 // ─── 操作函數 ───────────────────────────────────────────────────
 
 export async function click(ref: string): Promise<ActionResult> {
+  sessionStats.actions++;
   const client = await getClient();
   const { Runtime, Input } = client;
 
@@ -125,6 +126,7 @@ export async function typeText(
   text: string,
   opts: { clear?: boolean; slowly?: boolean } = {}
 ): Promise<ActionResult> {
+  sessionStats.actions++;
   const client = await getClient();
   const { Runtime } = client;
 
@@ -199,6 +201,7 @@ export async function scroll(
   direction: 'up' | 'down' | 'left' | 'right',
   amount = 500
 ): Promise<ActionResult> {
+  sessionStats.actions++;
   const client = await getClient();
   const { Runtime } = client;
 
@@ -221,6 +224,7 @@ export async function scroll(
 }
 
 export async function navigate(url: string): Promise<ActionResult> {
+  sessionStats.actions++;
   const client = await getClient();
   const { Page } = client;
 
@@ -241,6 +245,7 @@ export async function navigate(url: string): Promise<ActionResult> {
 }
 
 export async function goBack(): Promise<ActionResult> {
+  sessionStats.actions++;
   const client = await getClient();
   const { Runtime } = client;
 
@@ -254,6 +259,7 @@ export async function goBack(): Promise<ActionResult> {
 }
 
 export async function goForward(): Promise<ActionResult> {
+  sessionStats.actions++;
   const client = await getClient();
   const { Runtime } = client;
 
@@ -267,6 +273,7 @@ export async function goForward(): Promise<ActionResult> {
 }
 
 export async function selectOption(ref: string, value: string): Promise<ActionResult> {
+  sessionStats.actions++;
   const client = await getClient();
   const { Runtime } = client;
 
@@ -295,6 +302,7 @@ export async function selectOption(ref: string, value: string): Promise<ActionRe
 }
 
 export async function hover(ref: string): Promise<ActionResult> {
+  sessionStats.actions++;
   const client = await getClient();
   const { Input, Runtime } = client;
 
