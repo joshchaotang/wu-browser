@@ -134,7 +134,7 @@ const adapter: SiteAdapter = {
     },
     {
       name: 'fill',
-      description: 'Auto-fill form fields by matching labels to data keys. Usage: form/fill --data \'{"name": "Josh", "email": "josh@wu-ai.ai"}\'',
+      description: 'Auto-fill form fields by matching labels to data keys. Usage: form/fill --data \'{"name": "Josh", "email": "user@example.com"}\'',
       execute: fill,
     },
   ],

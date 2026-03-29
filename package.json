@@ -1,23 +1,25 @@
 {
   "name": "wu-browser",
   "version": "1.6.0",
-  "description": "The missing browser layer for Claude. Incremental snapshots save 92% tokens.",
+  "description": "AI browser automation that saves 77% tokens. Incremental snapshots, UCF format, progressive disclosure.",
   "keywords": [
-    "claude",
-    "mcp",
-    "browser",
-    "automation",
+    "browser-automation",
     "ai-agent",
-    "dom",
-    "accessibility-tree",
+    "llm",
+    "token-optimization",
+    "mcp",
+    "web-scraping",
+    "accessibility",
     "incremental-snapshot",
-    "token-efficient",
-    "browser-automation"
+    "claude",
+    "gpt",
+    "browser-use"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/joshchaotang/wu-browser"
+    "url": "https://github.com/joshchaotang/wu-browser.git"
   },
+  "author": "Josh Chao Tang",
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
