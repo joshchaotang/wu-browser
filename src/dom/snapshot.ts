@@ -756,11 +756,17 @@ async function extractInteractive(
   };
 }
 
+/** Strip control characters that break JSON serialization */
+function sanitizeString(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 /** Convert a SnapshotResult to structured JSON format */
 export function snapshotToJson(result: SnapshotResult, mode: string): SnapshotJsonResult {
   return {
     url: result.url,
-    title: result.title,
+    title: sanitizeString(result.title),
     mode,
     tokenCount: result.tokenCount,
     elementCount: result.elementCount,
@@ -769,11 +775,11 @@ export function snapshotToJson(result: SnapshotResult, mode: string): SnapshotJs
     elements: (result.rawElements ?? []).map(el => ({
       ref: el.ref,
       role: el.role,
-      name: el.name,
+      name: sanitizeString(el.name),
       href: el.href ?? null,
       type: el.type ?? null,
-      ...(el.placeholder ? { placeholder: el.placeholder } : {}),
-      ...(el.value ? { value: el.value } : {}),
+      ...(el.placeholder ? { placeholder: sanitizeString(el.placeholder) } : {}),
+      ...(el.value ? { value: sanitizeString(el.value) } : {}),
       ...(el.region ? { region: el.region } : {}),
       ...(el.shadow ? { shadow: el.shadow } : {}),
     })),
