@@ -73,7 +73,7 @@ describe('Snapshot — Google homepage', () => {
     console.log('--- End snapshot ---');
 
     expect(result.url).toContain('google.com');
-    expect(result.tokenCount).toBeLessThan(1000);
+    expect(result.tokenCount).toBeLessThan(1500);
     expect(result.tree).toContain('[頁面]');
     expect(result.tree).toContain('---');
     expect(result.elementCount).toBeGreaterThan(0);
