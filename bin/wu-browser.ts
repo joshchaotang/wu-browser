@@ -487,6 +487,64 @@ program
     process.exit(results.every(r => r.success) ? 0 : 1);
   });
 
+// ─── session ─────────────────────────────��───────────────────
+
+const sessionCmd = program
+  .command('session')
+  .description('Encrypted session management (cookies + localStorage)');
+
+sessionCmd
+  .command('save <name>')
+  .description('Save current browser session')
+  .action(async (name: string) => {
+    await ensureConnected();
+    const { saveSession } = await import('../src/session/manager.js');
+    const result = await saveSession(name);
+    console.log(`Session "${name}" saved (${result.cookieCount} cookies, ${result.encrypted ? 'encrypted' : 'plaintext'})`);
+    process.exit(0);
+  });
+
+sessionCmd
+  .command('restore <name>')
+  .description('Restore a saved session')
+  .action(async (name: string) => {
+    await ensureConnected();
+    const { restoreSession } = await import('../src/session/manager.js');
+    const result = await restoreSession(name);
+    console.log(`Session "${name}" restored (${result.cookieCount} cookies, ${result.url})`);
+    process.exit(0);
+  });
+
+sessionCmd
+  .command('list')
+  .description('List all saved sessions')
+  .action(async () => {
+    const { listSessions } = await import('../src/session/manager.js');
+    const sessions = listSessions();
+    if (sessions.length === 0) {
+      console.log('No saved sessions. Use: wu-browser session save <name>');
+    } else {
+      for (const s of sessions) {
+        console.log(`  ${s.name} — ${s.timestamp} ${s.encrypted ? '🔒' : '📝'}`);
+      }
+    }
+    process.exit(0);
+  });
+
+sessionCmd
+  .command('delete <name>')
+  .description('Delete a saved session')
+  .action(async (name: string) => {
+    const { deleteSession } = await import('../src/session/manager.js');
+    if (deleteSession(name)) {
+      console.log(`Session "${name}" deleted.`);
+    } else {
+      console.error(`Session "${name}" not found.`);
+      process.exit(1);
+    }
+    process.exit(0);
+  });
+
 // ─── model ───────────────────────────────────────────────────
 
 program
