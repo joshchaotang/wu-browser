@@ -42,7 +42,7 @@ const program = new Command();
 program
   .name('wu-browser')
   .description('Browser automation via CDP — MCP server + CLI')
-  .version('1.2.0');
+  .version('1.3.0');
 
 // ─── 全域選項 ────────────────────────────────────────────────────
 
