@@ -130,6 +130,92 @@ function updateDomainCache(domain: string, elements: RawElement[], url: string):
   });
 }
 
+// ─── Structural incremental (Level 3) ────────────────────────
+
+interface StructuralCache {
+  skeleton: string[];  // array of "role:region" per element
+  elements: RawElement[];
+  url: string;
+  timestamp: number;
+}
+
+const structuralCaches = new Map<string, StructuralCache>();
+
+function getElementSkeleton(el: RawElement): string {
+  return `${el.role}:${el.region ?? 'other'}`;
+}
+
+function computeStructuralDiff(
+  currentEls: RawElement[],
+  cache: StructuralCache
+): {
+  isStructural: boolean;
+  added: RawElement[];
+  removed: RawElement[];
+  changed: Array<{ current: RawElement; prev: RawElement }>;
+  unchanged: number;
+} | null {
+  const currentSkeleton = currentEls.map(getElementSkeleton);
+  const prevSkeleton = cache.skeleton;
+
+  // Compute skeleton similarity
+  const maxLen = Math.max(currentSkeleton.length, prevSkeleton.length);
+  if (maxLen === 0) return null;
+
+  let matchCount = 0;
+  const minLen = Math.min(currentSkeleton.length, prevSkeleton.length);
+  for (let i = 0; i < minLen; i++) {
+    if (currentSkeleton[i] === prevSkeleton[i]) matchCount++;
+  }
+
+  const similarity = matchCount / maxLen;
+  if (similarity < 0.7) return null;
+
+  // Structural match! Now find actual diffs
+  const added: RawElement[] = [];
+  const removed: RawElement[] = [];
+  const changed: Array<{ current: RawElement; prev: RawElement }> = [];
+  let unchanged = 0;
+
+  for (let i = 0; i < minLen; i++) {
+    if (currentSkeleton[i] === prevSkeleton[i]) {
+      // Same skeleton position — check if content changed
+      const curr = currentEls[i];
+      const prev = cache.elements[i];
+      if (curr.name !== prev.name || (curr.href ?? '') !== (prev.href ?? '')) {
+        changed.push({ current: curr, prev });
+      } else {
+        unchanged++;
+      }
+    } else {
+      added.push(currentEls[i]);
+    }
+  }
+
+  // Extra elements in current
+  for (let i = minLen; i < currentEls.length; i++) {
+    added.push(currentEls[i]);
+  }
+
+  // Extra elements in prev (removed)
+  for (let i = minLen; i < cache.elements.length; i++) {
+    removed.push(cache.elements[i]);
+  }
+
+  return { isStructural: true, added, removed, changed, unchanged };
+}
+
+function updateStructuralCache(elements: RawElement[], url: string): void {
+  const domain = getDomain(url);
+  if (!domain) return;
+  structuralCaches.set(domain, {
+    skeleton: elements.map(getElementSkeleton),
+    elements: elements.map(el => ({ ...el })),
+    url,
+    timestamp: Date.now(),
+  });
+}
+
 /** Load snapshot cache from external storage (for CLI cross-process incremental) */
 export function loadSnapshotCache(data: {
   snapshots?: Record<string, PreviousSnapshot>;
@@ -855,8 +941,47 @@ async function extractInteractive(
     }
   }
 
-  // Level 3: Full snapshot (no incremental match)
-  if (!incrementalMode && !domainIncrementalMode) {
+  // Level 3: Structural incremental (same domain, similar skeleton)
+  let structuralMode = false;
+  if (!incrementalMode && !domainIncrementalMode && useIncremental) {
+    const domain = getDomain(url);
+    if (domain) {
+      const structCache = structuralCaches.get(domain);
+      if (structCache && structCache.url !== url) {
+        const diff = computeStructuralDiff(elements, structCache);
+        if (diff && diff.isStructural) {
+          structuralMode = true;
+          const totalChanges = diff.added.length + diff.changed.length;
+          changedElements = totalChanges;
+
+          lines.push(`[頁面] ${title} (${url})`);
+          lines.push('---');
+          lines.push(`[structural-diff from ${structCache.url}] +${diff.added.length} -${diff.removed.length} ~${diff.changed.length} elements`);
+
+          if (diff.changed.length > 0) {
+            lines.push('[變化元素]');
+            for (const c of diff.changed) {
+              lines.push(formatElement(c.current));
+            }
+          }
+          if (diff.added.length > 0) {
+            lines.push('[新增元素]');
+            for (const a of diff.added) {
+              lines.push(formatElement(a));
+            }
+          }
+          if (diff.unchanged > 0) {
+            lines.push(`[... ${diff.unchanged} 個元素未變化]`);
+          }
+          lines.push('---');
+          lines.push(`[${elements.length} 個元素 · structural-diff 模式]`);
+        }
+      }
+    }
+  }
+
+  // Level 4: Full snapshot (no incremental match)
+  if (!incrementalMode && !domainIncrementalMode && !structuralMode) {
     lines.push(`[頁面] ${title} (${url})`);
     lines.push('---');
 
@@ -889,7 +1014,10 @@ async function extractInteractive(
     updateDomainCache(domain, allRawElements, url);
   }
 
-  const modeLabel = incrementalMode ? ' [incremental]' : domainIncrementalMode ? ' [domain-incremental]' : '';
+  // Update structural cache
+  updateStructuralCache(elements, url);
+
+  const modeLabel = incrementalMode ? ' [incremental]' : domainIncrementalMode ? ' [domain-incremental]' : structuralMode ? ' [structural-diff]' : '';
   audit('SNAPSHOT', `interactive ${tokenCount}tokens${modeLabel}`);
 
   return {
@@ -900,7 +1028,7 @@ async function extractInteractive(
     url,
     title,
     elementCount: domainIncrementalMode ? allRawElements.length : elements.length,
-    incrementalMode: incrementalMode || domainIncrementalMode,
+    incrementalMode: incrementalMode || domainIncrementalMode || structuralMode,
     changedElements,
     rawElements: elements,
   };
