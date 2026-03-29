@@ -92,10 +92,14 @@ export function createMcpServer(): McpServer {
       maxTokens: z.number().default(1500).describe('Maximum tokens in output'),
       selector: z.string().optional().describe('CSS selector to limit scope'),
       outputFormat: z.enum(['text', 'json']).default('text').describe('Output format: "text" (default) or "json"'),
+      snapshotFormat: z.enum(['rich', 'ucf']).default('rich').describe('Snapshot format: "rich" (detailed) or "ucf" (ultra-compact, ~5 tokens/element)'),
       contentBoundaries: z.boolean().default(false).describe('Wrap output in content boundary markers for prompt injection safety'),
     },
-  }, async ({ mode, maxTokens, selector, outputFormat, contentBoundaries }) => {
-    const result = await snapshot({ mode, maxTokens, selector });
+  }, async ({ mode, maxTokens, selector, outputFormat, snapshotFormat, contentBoundaries }) => {
+    // Use profile default if not explicitly set
+    const profile = getCurrentProfile();
+    const format = snapshotFormat === 'rich' ? (profile.defaultFormat as any) : snapshotFormat;
+    const result = await snapshot({ mode, maxTokens, selector, format });
     sessionStats.actions++;
     const cost = getTokenCost(result.tokenCount);
 

@@ -73,6 +73,7 @@ program
   .option('--json', 'Output as JSON')
   .option('--jq <expr>', 'Filter JSON output with jq expression')
   .option('--content-boundaries', 'Wrap output in content boundary markers')
+  .option('--format <fmt>', 'Output format: rich (default), ucf (ultra-compact)', 'rich')
   .action(async (opts) => {
     await ensureConnected();
 
@@ -86,10 +87,14 @@ program
 
     const mode = opts.content ? 'content' : opts.full ? 'full' : 'interactive';
     const tokenBudget = parseInt(opts.maxOutput ?? opts.maxTokens);
+    // Determine format: CLI flag > profile default > 'rich'
+    const profile = getCurrentProfile();
+    const format = (opts.format !== 'rich' ? opts.format : profile.defaultFormat) as 'rich' | 'ucf';
     const result = await snapshot({
       mode,
       maxTokens: tokenBudget,
       selector: opts.selector,
+      format,
     });
 
     // Save snapshot cache for next CLI invocation

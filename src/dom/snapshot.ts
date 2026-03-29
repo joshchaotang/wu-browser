@@ -13,6 +13,9 @@ import { estimateTokens } from '../utils/token-counter.js';
 import { audit, debug } from '../utils/logger.js';
 import { getCurrentProfile, type ModelProfile } from '../model-sense/index.js';
 import { type SnapshotFormatConfig } from '../model-sense/profiles.js';
+import { formatUCF } from '../snapshot/ucf-formatter.js';
+
+export type SnapshotFormat = 'rich' | 'compact' | 'ucf';
 
 export interface SnapshotOptions {
   mode: 'interactive' | 'content' | 'full';
@@ -21,6 +24,8 @@ export interface SnapshotOptions {
   includeHidden?: boolean;
   autoAcceptCookies?: boolean;
   incremental?: boolean;
+  /** Output format: 'rich' (default), 'compact'/'ucf' (ultra-compact) */
+  format?: SnapshotFormat;
 }
 
 export interface SnapshotResult {
@@ -856,12 +861,14 @@ export async function snapshot(opts: SnapshotOptions): Promise<SnapshotResult> {
 
   let result: SnapshotResult;
 
+  const format = opts.format ?? 'rich';
+
   if (opts.mode === 'content') {
     result = await extractContent(maxTokens);
   } else if (opts.mode === 'full') {
     result = await extractFull(maxTokens);
   } else {
-    result = await extractInteractive(maxTokens, opts.selector, useIncremental);
+    result = await extractInteractive(maxTokens, opts.selector, useIncremental, format);
   }
 
   result.cookieBannerClosed = cookieBannerClosed;
@@ -883,7 +890,8 @@ export async function snapshot(opts: SnapshotOptions): Promise<SnapshotResult> {
 async function extractInteractive(
   maxTokens: number,
   selector?: string,
-  useIncremental = true
+  useIncremental = true,
+  format: SnapshotFormat = 'rich',
 ): Promise<SnapshotResult> {
   const client = await getClient();
   const { Runtime, Page } = client;
@@ -1056,8 +1064,24 @@ async function extractInteractive(
     lines.push(suffix);
   }
 
-  const tree = lines.join('\n');
-  const tokenCount = estimateTokens(tree);
+  // UCF format: override tree output if format is ucf/compact
+  let tree: string;
+  let tokenCount: number;
+
+  if ((format === 'ucf' || format === 'compact') && !incrementalMode && !domainIncrementalMode && !structuralMode) {
+    // UCF full snapshot
+    const ucf = formatUCF(elements, url, title);
+    tree = ucf.text;
+    tokenCount = ucf.tokenCount;
+  } else if ((format === 'ucf' || format === 'compact') && (incrementalMode || domainIncrementalMode || structuralMode)) {
+    // UCF with incremental: use the lines already built (rich format for diffs)
+    // Incremental diffs are already compact enough; UCF header for context
+    tree = lines.join('\n');
+    tokenCount = estimateTokens(tree);
+  } else {
+    tree = lines.join('\n');
+    tokenCount = estimateTokens(tree);
+  }
 
   // Save current snapshot for next incremental diff
   prevSnapshots.set(url, {

@@ -24,6 +24,8 @@ export interface ModelProfile {
   optimalMaxTokens: number;
   snapshotFormat: SnapshotFormatConfig;
   pruningStrategy: 'aggressive' | 'balanced' | 'minimal';
+  /** 預設輸出格式：'rich' or 'ucf' */
+  defaultFormat: 'rich' | 'ucf';
 }
 
 /**
@@ -42,6 +44,7 @@ export const BUILTIN_PROFILES: Record<string, ModelProfile> = {
     optimalMaxTokens: 5000,
     snapshotFormat: { includeHref: true, includeRegion: true, refFormat: 'full', depthLimit: 0 },
     pruningStrategy: 'minimal',
+    defaultFormat: 'rich',
   },
   'claude-sonnet-4.6': {
     name: 'claude-sonnet-4.6',
@@ -50,6 +53,7 @@ export const BUILTIN_PROFILES: Record<string, ModelProfile> = {
     optimalMaxTokens: 2000,
     snapshotFormat: { includeHref: true, includeRegion: true, refFormat: 'full', depthLimit: 0 },
     pruningStrategy: 'balanced',
+    defaultFormat: 'rich',
   },
   'claude-haiku-4.5': {
     name: 'claude-haiku-4.5',
@@ -58,6 +62,7 @@ export const BUILTIN_PROFILES: Record<string, ModelProfile> = {
     optimalMaxTokens: 1500,
     snapshotFormat: { includeHref: true, includeRegion: false, refFormat: 'full', depthLimit: 5 },
     pruningStrategy: 'balanced',
+    defaultFormat: 'rich',
   },
   'gpt-4o': {
     name: 'gpt-4o',
@@ -66,6 +71,7 @@ export const BUILTIN_PROFILES: Record<string, ModelProfile> = {
     optimalMaxTokens: 1500,
     snapshotFormat: { includeHref: true, includeRegion: false, refFormat: 'compact', depthLimit: 5 },
     pruningStrategy: 'balanced',
+    defaultFormat: 'rich',
   },
   'gpt-4o-mini': {
     name: 'gpt-4o-mini',
@@ -74,6 +80,7 @@ export const BUILTIN_PROFILES: Record<string, ModelProfile> = {
     optimalMaxTokens: 800,
     snapshotFormat: { includeHref: false, includeRegion: false, refFormat: 'compact', depthLimit: 3 },
     pruningStrategy: 'aggressive',
+    defaultFormat: 'ucf',
   },
   'gemini-2.5-pro': {
     name: 'gemini-2.5-pro',
@@ -82,6 +89,7 @@ export const BUILTIN_PROFILES: Record<string, ModelProfile> = {
     optimalMaxTokens: 4000,
     snapshotFormat: { includeHref: true, includeRegion: true, refFormat: 'full', depthLimit: 0 },
     pruningStrategy: 'minimal',
+    defaultFormat: 'rich',
   },
   'gemini-2.5-flash': {
     name: 'gemini-2.5-flash',
@@ -90,6 +98,7 @@ export const BUILTIN_PROFILES: Record<string, ModelProfile> = {
     optimalMaxTokens: 3000,
     snapshotFormat: { includeHref: true, includeRegion: false, refFormat: 'full', depthLimit: 0 },
     pruningStrategy: 'balanced',
+    defaultFormat: 'rich',
   },
   'local-8k': {
     name: 'local-8k',
@@ -98,6 +107,7 @@ export const BUILTIN_PROFILES: Record<string, ModelProfile> = {
     optimalMaxTokens: 400,
     snapshotFormat: { includeHref: false, includeRegion: false, refFormat: 'compact', depthLimit: 2 },
     pruningStrategy: 'aggressive',
+    defaultFormat: 'ucf',
   },
   'local-32k': {
     name: 'local-32k',
@@ -106,6 +116,7 @@ export const BUILTIN_PROFILES: Record<string, ModelProfile> = {
     optimalMaxTokens: 800,
     snapshotFormat: { includeHref: false, includeRegion: false, refFormat: 'compact', depthLimit: 4 },
     pruningStrategy: 'balanced',
+    defaultFormat: 'ucf',
   },
 };
 
