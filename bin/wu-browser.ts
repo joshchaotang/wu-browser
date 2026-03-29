@@ -20,6 +20,7 @@
 
 import { Command } from 'commander';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { connect, isConnected } from '../src/browser/connection.js';
 import { launchChrome } from '../src/browser/launcher.js';
@@ -63,6 +64,7 @@ program
   .option('--selector <sel>', 'Limit to CSS selector')
   .option('--json', 'Output as JSON')
   .option('--jq <expr>', 'Filter JSON output with jq expression')
+  .option('--content-boundaries', 'Wrap output in content boundary markers')
   .action(async (opts) => {
     await ensureConnected();
 
@@ -88,12 +90,12 @@ program
       // Non-critical
     }
 
+    let output: string;
     if (opts.json) {
       const jsonResult = snapshotToJson(result, mode);
-      let output = JSON.stringify(jsonResult, null, 2);
+      output = JSON.stringify(jsonResult, null, 2);
 
       if (opts.jq) {
-        // Pipe through system jq
         try {
           output = execSync(`jq ${JSON.stringify(opts.jq)}`, {
             input: output,
@@ -104,11 +106,18 @@ program
           process.exit(1);
         }
       }
-
-      console.log(output);
     } else {
-      console.log(result.tree);
-      console.log(`\n[Tokens: ~${result.tokenCount}]`);
+      output = `${result.tree}\n\n[Tokens: ~${result.tokenCount}]`;
+    }
+
+    if (opts.contentBoundaries) {
+      const nonce = randomBytes(8).toString('hex');
+      const origin = result.url;
+      console.log(`--- WU_BROWSER_PAGE_CONTENT nonce=${nonce} origin=${origin} ---`);
+      console.log(output);
+      console.log(`--- END WU_BROWSER_PAGE_CONTENT nonce=${nonce} ---`);
+    } else {
+      console.log(output);
     }
     const cost = getTokenCost(result.tokenCount);
     process.stderr.write(`[wu-browser] tokens: ${cost.thisAction} · session: ${cost.sessionTotal} · avg: ${cost.avgTokensPerSnapshot}/snap\n`);

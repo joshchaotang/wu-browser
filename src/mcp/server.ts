@@ -91,16 +91,27 @@ export function createMcpServer(): McpServer {
       maxTokens: z.number().default(1500).describe('Maximum tokens in output'),
       selector: z.string().optional().describe('CSS selector to limit scope'),
       outputFormat: z.enum(['text', 'json']).default('text').describe('Output format: "text" (default) or "json"'),
+      contentBoundaries: z.boolean().default(false).describe('Wrap output in content boundary markers for prompt injection safety'),
     },
-  }, async ({ mode, maxTokens, selector, outputFormat }) => {
+  }, async ({ mode, maxTokens, selector, outputFormat, contentBoundaries }) => {
     const result = await snapshot({ mode, maxTokens, selector });
     sessionStats.actions++;
     const cost = getTokenCost(result.tokenCount);
+
+    let text: string;
     if (outputFormat === 'json') {
       const jsonResult = snapshotToJson(result, mode);
-      return { content: [{ type: 'text', text: JSON.stringify({ ...jsonResult, _tokenCost: cost }, null, 2) }] };
+      text = JSON.stringify({ ...jsonResult, _tokenCost: cost }, null, 2);
+    } else {
+      text = `${result.tree}\n[_tokenCost: this=${cost.thisAction} session=${cost.sessionTotal} avg=${cost.avgTokensPerSnapshot}/snap]`;
     }
-    return { content: [{ type: 'text', text: `${result.tree}\n[_tokenCost: this=${cost.thisAction} session=${cost.sessionTotal} avg=${cost.avgTokensPerSnapshot}/snap]` }] };
+
+    if (contentBoundaries) {
+      const nonce = Math.random().toString(36).substring(2, 18);
+      text = `--- WU_BROWSER_PAGE_CONTENT nonce=${nonce} origin=${result.url} ---\n${text}\n--- END WU_BROWSER_PAGE_CONTENT nonce=${nonce} ---`;
+    }
+
+    return { content: [{ type: 'text', text }] };
   });
 
   server.registerTool('wu_get_text', {
