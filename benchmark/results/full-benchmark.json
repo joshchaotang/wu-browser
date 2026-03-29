@@ -1,0 +1,86 @@
+[
+  {
+    "scenario": "S1 Single Page",
+    "runs": [
+      908,
+      908,
+      908
+    ],
+    "median": 908
+  },
+  {
+    "scenario": "S2 Same-Page Re-read",
+    "runs": [
+      72,
+      72,
+      72
+    ],
+    "median": 72
+  },
+  {
+    "scenario": "S3 Cross-Page",
+    "runs": [
+      2823,
+      2823,
+      2823
+    ],
+    "median": 2823
+  },
+  {
+    "scenario": "S4 4-Step Workflow",
+    "runs": [
+      2984,
+      2984,
+      2984
+    ],
+    "median": 2984
+  },
+  {
+    "scenario": "S6 Batch vs Sequential",
+    "runs": [
+      20,
+      12
+    ],
+    "median": 12,
+    "details": {
+      "sequentialMs": 20,
+      "batchMs": 12
+    }
+  },
+  {
+    "scenario": "S7 ModelSense Profiles (Google)",
+    "runs": [
+      908,
+      908,
+      865,
+      558,
+      339
+    ],
+    "median": 908,
+    "details": {
+      "claude-opus-4.6": 908,
+      "claude-sonnet-4.6": 908,
+      "gpt-4o": 865,
+      "gpt-4o-mini": 558,
+      "local-8k": 339
+    }
+  },
+  {
+    "scenario": "S7b ModelSense Profiles (Search)",
+    "runs": [
+      4560,
+      1915,
+      1405,
+      729,
+      358
+    ],
+    "median": 1915,
+    "details": {
+      "claude-opus-4.6": 4560,
+      "claude-sonnet-4.6": 1915,
+      "gpt-4o": 1405,
+      "gpt-4o-mini": 729,
+      "local-8k": 358
+    }
+  }
+]
