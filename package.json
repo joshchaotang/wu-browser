@@ -1,0 +1,38 @@
+{
+  "name": "wu-browser",
+  "version": "1.0.0",
+  "description": "The missing browser layer for Claude. DOM-based, incremental snapshots, 4-level permissions.",
+  "keywords": ["claude", "mcp", "browser", "automation", "ai-agent", "dom", "accessibility-tree", "cdp"],
+  "repository": "https://github.com/joshchaotang/wu-browser",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "wu-browser": "dist/bin/wu-browser.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "chrome-remote-interface": "^0.34.0",
+    "commander": "^14.0.3",
+    "fastify": "^5.8.4",
+    "js-tiktoken": "^1.0.21",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/chrome-remote-interface": "^0.33.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
