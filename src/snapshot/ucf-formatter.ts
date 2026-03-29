@@ -56,13 +56,135 @@ function getRoleCode(el: RawElement): string {
   return ROLE_MAP[role] ?? 'x';
 }
 
-/** Truncate name to maxLen, add … if truncated */
-function truncName(name: string, maxLen: number): string {
+/**
+ * Get UCF state code from RawElement.
+ * Returns empty string if no state applies.
+ *
+ * ✓ = checked/selected/expanded
+ * - = unchecked/collapsed (only when attribute exists but is false)
+ * ○ = disabled
+ * ! = required
+ */
+function getStateCode(el: RawElement): string {
+  let state = '';
+
+  // checked / expanded → ✓ or -
+  if (el.checked === 'true' || el.checked === 'mixed') {
+    state += '✓';
+  } else if (el.checked === 'false') {
+    state += '-';
+  }
+
+  if (el.expanded === 'true') {
+    state += '✓';
+  } else if (el.expanded === 'false' && !state) {
+    // Only add - for expanded if no checked state already present
+    state += '-';
+  }
+
+  // disabled
+  if (el.disabled) {
+    state += '○';
+  }
+
+  // required
+  if (el.required) {
+    state += '!';
+  }
+
+  return state;
+}
+
+/** Extract short domain from URL (strip www., common TLDs for brevity) */
+function extractDomain(href: string, baseUrl?: string): string | null {
+  try {
+    // Resolve relative URLs
+    const resolved = baseUrl ? new URL(href, baseUrl) : new URL(href);
+    return resolved.hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+/** Get domain hint for a link element. Returns '' if same domain or not applicable. */
+function getDomainHint(el: RawElement, pageDomain: string): string {
+  if (!el.href) return '';
+  const linkDomain = extractDomain(el.href);
+  if (!linkDomain) return '';
+  // Same exact domain (after www. strip) → no hint
+  if (linkDomain === pageDomain) return '';
+  // Shorten: remove common suffixes for brevity
+  const short = linkDomain
+    .replace(/\.com$/, '')
+    .replace(/\.org$/, '')
+    .replace(/\.net$/, '');
+  return `→${short}`;
+}
+
+/** Max tokens per element name (token-aware truncation) */
+const MAX_NAME_TOKENS = 8;
+
+/**
+ * Truncate name to stay within token budget.
+ *
+ * Strategy:
+ * 1. Short English names (< 15 chars) → skip (always < 8 tokens)
+ * 2. Estimate: Chinese chars × 2.5 + English words × 1.2
+ * 3. If estimate > MAX_NAME_TOKENS → binary search with tokenizer
+ * 4. Fallback to char limit if all else fails
+ */
+function truncName(name: string, _maxLen: number): string {
   if (!name) return '';
-  // Clean whitespace
   const clean = name.replace(/\s+/g, ' ').trim();
-  if (clean.length <= maxLen) return clean;
-  return clean.substring(0, maxLen) + '…';
+  if (!clean) return '';
+
+  // Fast path: short ASCII-only text is always under budget
+  if (clean.length <= 12 && !/[\u4e00-\u9fff\u3400-\u4dbf]/.test(clean)) {
+    return clean;
+  }
+
+  // Estimate token count without calling tokenizer
+  const cjkCount = (clean.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) ?? []).length;
+  const nonCjkLen = clean.length - cjkCount;
+  const estimate = cjkCount * 2.5 + nonCjkLen * 0.3;
+
+  if (estimate <= MAX_NAME_TOKENS) return clean;
+
+  // Over budget — use tokenizer for precise truncation
+  const actual = estimateTokens(clean);
+  if (actual <= MAX_NAME_TOKENS) return clean;
+
+  // Binary search for the right truncation point
+  let lo = 1;
+  let hi = clean.length;
+  let best = Math.min(clean.length, 8); // fallback
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const sub = clean.substring(0, mid);
+    const tokens = estimateTokens(sub);
+    if (tokens <= MAX_NAME_TOKENS) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  if (best >= clean.length) return clean;
+
+  // Don't break in the middle of a CJK character (shouldn't happen with substring)
+  // but do try to break at a word boundary for English
+  let cutPoint = best;
+  if (!/[\u4e00-\u9fff\u3400-\u4dbf]/.test(clean[cutPoint - 1] ?? '')) {
+    // Try to find a space to break at
+    const lastSpace = clean.lastIndexOf(' ', cutPoint);
+    if (lastSpace > cutPoint * 0.5) {
+      cutPoint = lastSpace;
+    }
+  }
+
+  return clean.substring(0, cutPoint) + '…';
 }
 
 export interface UCFOptions {
@@ -72,6 +194,8 @@ export interface UCFOptions {
   includeType?: boolean;
   /** Separator between elements (default: '|') */
   separator?: string;
+  /** Include domain hints for external links (default: true) */
+  domainHints?: boolean;
 }
 
 /**
@@ -90,10 +214,14 @@ export function formatUCF(
   const maxNameLen = opts?.maxNameLen ?? 20;
   const sep = opts?.separator ?? '|';
   const includeType = opts?.includeType ?? true;
+  const useDomainHints = opts?.domainHints ?? true;
 
   // Header: compact URL (strip protocol)
   const shortUrl = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
   const header = `${shortUrl}|${elements.length}`;
+
+  // Page domain for domain hints
+  const pageDomain = extractDomain(url) ?? '';
 
   // Elements
   const parts: string[] = [];
@@ -102,9 +230,10 @@ export function formatUCF(
 
     const ref = el.ref.replace(/@e/, 'e').replace(/@/, '');
     const code = getRoleCode(el);
+    const state = getStateCode(el);
     const name = truncName(el.name || el.placeholder || '', maxNameLen);
 
-    let entry = `${ref}:${code}`;
+    let entry = `${ref}:${code}${state}`;
 
     // Add type hint for inputs
     if (includeType && code === 'c' && el.type && el.type !== 'text') {
@@ -112,6 +241,12 @@ export function formatUCF(
     }
 
     if (name) entry += ` ${name}`;
+
+    // Domain hint for external links
+    if (useDomainHints && code === 'a' && el.href) {
+      const hint = getDomainHint(el, pageDomain);
+      if (hint) entry += hint;
+    }
 
     parts.push(entry);
   }
@@ -129,13 +264,26 @@ export function formatUCF(
 export function formatUCFElement(el: RawElement, maxNameLen = 20): string {
   const ref = el.ref.replace(/@e/, 'e').replace(/@/, '');
   const code = getRoleCode(el);
+  const state = getStateCode(el);
   const name = truncName(el.name || el.placeholder || '', maxNameLen);
-  let entry = `${ref}:${code}`;
+  let entry = `${ref}:${code}${state}`;
   if (code === 'c' && el.type && el.type !== 'text') {
     entry += `[${el.type}]`;
   }
   if (name) entry += ` ${name}`;
   return entry;
+}
+
+/** Decode a UCF state code (for documentation/testing) */
+export function decodeStateCode(code: string): string[] {
+  const states: string[] = [];
+  for (const ch of code) {
+    if (ch === '✓') states.push('checked/expanded');
+    else if (ch === '-') states.push('unchecked/collapsed');
+    else if (ch === '○') states.push('disabled');
+    else if (ch === '!') states.push('required');
+  }
+  return states;
 }
 
 /** Decode a UCF role code back to full role name (for documentation/testing) */

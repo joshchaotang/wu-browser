@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Form Test Page</title></head>
+<body>
+<main>
+  <h1>Registration Form</h1>
+  <form>
+    <label for="email">Email</label>
+    <input id="email" type="email" required placeholder="you@example.com">
+
+    <label for="password">Password</label>
+    <input id="password" type="password" required>
+
+    <label for="name">Full Name</label>
+    <input id="name" type="text" placeholder="John Doe">
+
+    <label for="country">Country</label>
+    <select id="country">
+      <option value="tw" selected>Taiwan</option>
+      <option value="us">United States</option>
+      <option value="jp">Japan</option>
+    </select>
+
+    <label>
+      <input type="checkbox" id="remember" checked> Remember me
+    </label>
+
+    <label>
+      <input type="checkbox" id="subscribe"> Subscribe to newsletter
+    </label>
+
+    <label>
+      <input type="radio" name="plan" value="free" checked> Free
+    </label>
+    <label>
+      <input type="radio" name="plan" value="pro"> Pro
+    </label>
+
+    <button type="submit">Sign Up</button>
+    <button type="reset" disabled>Reset</button>
+  </form>
+</main>
+<footer>
+  <a href="https://example.com/privacy">Privacy Policy</a>
+  <a href="/terms">Terms of Service</a>
+  <p>&copy; 2026 Example Corp</p>
+</footer>
+</body>
+</html>

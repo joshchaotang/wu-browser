@@ -7,6 +7,7 @@
 
 import { estimateTokens } from '../utils/token-counter.js';
 import { type SnapshotFormatConfig } from '../model-sense/profiles.js';
+import { scoreAndSort } from '../snapshot/importance-scorer.js';
 
 export interface RawElement {
   ref: string;
@@ -20,6 +21,14 @@ export interface RawElement {
   region?: 'main' | 'header' | 'nav' | 'aside' | 'footer' | 'other';
   /** 是否來自 Shadow DOM */
   shadow?: boolean;
+  /** ARIA state: checked (true/false/mixed) */
+  checked?: 'true' | 'false' | 'mixed';
+  /** ARIA state: expanded (true/false) */
+  expanded?: 'true' | 'false';
+  /** ARIA state: disabled */
+  disabled?: boolean;
+  /** ARIA state: required */
+  required?: boolean;
 }
 
 // 已知垃圾區域的 CSS class/id pattern
@@ -42,7 +51,7 @@ export function isJunkSelector(selector: string): boolean {
 }
 
 /**
- * 將元素按優先區域分組，超過 maxTokens 時依序裁剪低優先級區域。
+ * 按 importance score 排序元素，超過 maxTokens 時從低分開始砍。
  */
 export function pruneElements(
   elements: RawElement[],
@@ -53,25 +62,9 @@ export function pruneElements(
     return { elements: [], truncated: false, truncatedPercent: 0, totalElements: 0 };
   }
 
-  // 按優先級分組
-  const groups: Record<string, RawElement[]> = {
-    main: [],
-    header: [],
-    nav: [],
-    other: [],
-    aside: [],
-    footer: [],
-  };
-
-  for (const el of elements) {
-    const region = el.region ?? 'other';
-    const bucket = groups[region] ?? groups['other'];
-    bucket.push(el);
-  }
-
-  // 優先級順序
-  const priority = ['main', 'header', 'nav', 'other', 'aside', 'footer'];
-  const result: RawElement[] = [];
+  // Sort by importance score (descending) — most important first
+  const scored = scoreAndSort(elements);
+  const sorted = scored.map(s => s.el);
 
   // 用 tiktoken 精確計算元素格式化後的 token 消耗
   function elTokens(el: RawElement): number {
@@ -79,24 +72,20 @@ export function pruneElements(
   }
 
   // 預留 header + footer 的 token 預算
-  // header: [頁面] title (url)\n---\n ≈ 40-60 tokens
-  // footer: ---\n[統計行]\n ≈ 30-40 tokens
   let tokenBudget = maxTokens - 100;
   const totalInput = elements.length;
+  const result: RawElement[] = [];
 
-  for (const region of priority) {
-    const bucket = groups[region] ?? [];
-    for (const el of bucket) {
-      const cost = elTokens(el);
-      if (tokenBudget - cost < 0) {
-        const used = result.length;
-        const truncatedPercent =
-          totalInput > 0 ? Math.round(((totalInput - used) / totalInput) * 100) : 0;
-        return { elements: result, truncated: true, truncatedPercent, totalElements: totalInput };
-      }
-      tokenBudget -= cost;
-      result.push(el);
+  for (const el of sorted) {
+    const cost = elTokens(el);
+    if (tokenBudget - cost < 0) {
+      const used = result.length;
+      const truncatedPercent =
+        totalInput > 0 ? Math.round(((totalInput - used) / totalInput) * 100) : 0;
+      return { elements: result, truncated: true, truncatedPercent, totalElements: totalInput };
     }
+    tokenBudget -= cost;
+    result.push(el);
   }
 
   return { elements: result, truncated: false, truncatedPercent: 0, totalElements: totalInput };

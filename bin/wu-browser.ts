@@ -32,6 +32,8 @@ import { startHttpServer } from '../src/http/server.js';
 import { loadBuiltinAdapters } from '../src/adapters/index.js';
 import { findBySemantics } from '../src/dom/semantics.js';
 import { detectModel, listProfiles, getCurrentProfile } from '../src/model-sense/index.js';
+import { getLegendText } from '../src/snapshot/session-legend.js';
+import { progressiveSnapshot, type ProgressiveLayer } from '../src/snapshot/progressive.js';
 
 // Load adapters at startup
 await loadBuiltinAdapters();
@@ -74,6 +76,11 @@ program
   .option('--jq <expr>', 'Filter JSON output with jq expression')
   .option('--content-boundaries', 'Wrap output in content boundary markers')
   .option('--format <fmt>', 'Output format: rich (default), ucf (ultra-compact)', 'rich')
+  .option('--legend', 'Force include UCF legend')
+  .option('--no-legend', 'Skip UCF legend')
+  .option('--progressive', 'Progressive mode: show most important elements first')
+  .option('-2, --layer2', 'Progressive layer 2 (more elements)')
+  .option('--all', 'Progressive layer 3 (all elements)')
   .action(async (opts) => {
     await ensureConnected();
 
@@ -105,7 +112,15 @@ program
     }
 
     let output: string;
-    if (opts.json) {
+    if (opts.progressive || opts.layer2 || opts.all) {
+      // Progressive mode: use layered output
+      const layer: ProgressiveLayer = opts.all ? 3 : opts.layer2 ? 2 : 1;
+      const rawElements = result.rawElements ?? [];
+      const prog = progressiveSnapshot(rawElements, result.url, result.title, layer);
+      const showLegend = format === 'ucf' && opts.legend !== false;
+      const legendPrefix = showLegend ? getLegendText() + '\n' : '';
+      output = `${legendPrefix}${prog.text}\n\n[Tokens: ~${prog.tokenCount}]`;
+    } else if (opts.json) {
       const jsonResult = snapshotToJson(result, mode);
       output = JSON.stringify(jsonResult, null, 2);
 
@@ -121,7 +136,10 @@ program
         }
       }
     } else {
-      output = `${result.tree}\n\n[Tokens: ~${result.tokenCount}]`;
+      // Include legend for UCF format if --legend flag or default for ucf
+      const showLegend = format === 'ucf' && opts.legend !== false;
+      const legendPrefix = showLegend ? getLegendText() + '\n' : '';
+      output = `${legendPrefix}${result.tree}\n\n[Tokens: ~${result.tokenCount}]`;
     }
 
     if (opts.contentBoundaries) {

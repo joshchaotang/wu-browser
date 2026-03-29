@@ -1,5 +1,54 @@
 # Changelog
 
+## v1.6.0 (2026-03-29)
+
+### Core Breakthrough
+- **State Codes**: Conditional status indicators in UCF (✓ checked, - unchecked, ○ disabled, ! required)
+  - Zero token increase on stateless pages; ~10t on form pages
+  - LLM can see checkbox/radio/select state without extra round-trip
+- **Domain Hints**: External links show `→domain` target
+  - Same-domain links unchanged; external links add ~2t each
+  - Eliminates "where does this link go?" follow-up queries
+- **Smart Name Truncation**: Token-aware name truncation (8 token budget per name)
+  - Chinese pages: ~10t/el → ~7-8t/el
+  - Binary search with js-tiktoken for precise CJK truncation
+- **Importance Scoring**: Elements scored 0-100 by role + region
+  - Pruning now removes least important elements first (not by DOM order)
+  - `src/snapshot/importance-scorer.ts` — deterministic, no ML
+- **Progressive Snapshot**: 3-layer disclosure
+  - Layer 1: core interactive (~200t on Google)
+  - Layer 2: full interactive (~320t)
+  - Layer 3: all elements (~406t)
+  - `--progressive`, `-2`, `--all` on CLI; `progressive: 1|2|3` on MCP
+- **Session Legend**: Auto-attached on first UCF snapshot in MCP session (~50t one-time)
+  - Subsequent snapshots skip legend (amortized 2.5t/snapshot over 20 calls)
+
+### Benchmark (三方公平對比)
+
+| 場景 | Wu UCF v1.6 | Wu UCF v1.5 | agent-browser | Playwright |
+|------|-------------|-------------|---------------|------------|
+| Google 首頁 | **406t** | 433t | 259t | 544t |
+| Google 搜尋 | **1,317t** | 1,752t | 1,859t | 8,356t |
+| GitHub repo | **1,624t** | 1,708t | 4,382t | N/A |
+| 同頁再讀 | **72t** | 72t | 259t | 544t |
+| 表單頁（state codes）| **169t** | N/A | N/A | N/A |
+
+### Progressive Snapshot 效果
+
+| 場景 | Full UCF | Progressive L1 | 省 |
+|------|----------|----------------|-----|
+| Google 首頁 | 406t | 207t | 49% |
+| Google 搜尋 | 1,317t | 908t | 31% |
+| GitHub repo | 1,624t | 1,560t | 4% |
+
+### v1.6 vs v1.5 Token 改善
+
+| 場景 | v1.5 UCF | v1.6 UCF | 改善 |
+|------|----------|----------|------|
+| Google 首頁 | 433t | 406t | -6% |
+| Google 搜尋 | 1,752t | 1,317t | -25% |
+| GitHub repo | 1,708t | 1,624t | -5% |
+
 ## v1.5.0 (2026-03-29)
 
 ### Core Breakthrough

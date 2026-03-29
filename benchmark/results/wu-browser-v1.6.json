@@ -1,0 +1,44 @@
+[
+  {
+    "scenario": "S1: Google homepage",
+    "wu_ucf": 406,
+    "wu_rich": 908,
+    "wu_progressive_l1": 207,
+    "wu_progressive_l2": 320,
+    "wu_incremental": 72,
+    "elements": 43,
+    "notes": "UCF with state codes + domain hints + smart truncation + importance sorting"
+  },
+  {
+    "scenario": "S2: Same-page re-read",
+    "wu_ucf": 72,
+    "wu_rich": 72,
+    "elements": 43,
+    "notes": "Incremental mode (identical page)"
+  },
+  {
+    "scenario": "S3: Google search",
+    "wu_ucf": 1317,
+    "wu_rich": 4515,
+    "wu_progressive_l1": 908,
+    "wu_incremental": 89,
+    "elements": 120,
+    "notes": "Search results with domain hints on result links"
+  },
+  {
+    "scenario": "S4: GitHub repo",
+    "wu_ucf": 1624,
+    "wu_rich": 5070,
+    "wu_progressive_l1": 1560,
+    "wu_incremental": 212,
+    "elements": 165,
+    "notes": "Large page with many links"
+  },
+  {
+    "scenario": "S5: Form page (state codes)",
+    "wu_ucf": 169,
+    "wu_rich": 281,
+    "elements": 18,
+    "notes": "State codes: ✓ checked, - unchecked, ○ disabled, ! required"
+  }
+]

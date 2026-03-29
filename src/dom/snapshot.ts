@@ -511,6 +511,22 @@ const EXTRACT_INTERACTIVE = `(function() {
     var ph = el.getAttribute('placeholder');
     if (ph && ph !== name) item.placeholder = ph;
 
+    // ARIA states for UCF state codes
+    var ariaChecked = el.getAttribute('aria-checked');
+    if (!ariaChecked && (role === 'checkbox' || role === 'radio')) {
+      ariaChecked = el.checked ? 'true' : 'false';
+    }
+    if (ariaChecked) item.checked = ariaChecked;
+
+    var ariaExpanded = el.getAttribute('aria-expanded');
+    if (ariaExpanded) item.expanded = ariaExpanded;
+
+    var ariaDisabled = el.getAttribute('aria-disabled');
+    if (ariaDisabled === 'true' || el.disabled) item.disabled = true;
+
+    var ariaRequired = el.getAttribute('aria-required');
+    if (ariaRequired === 'true' || el.required) item.required = true;
+
     window.__wuRefs[ref] = el;
     results.push(item);
   }

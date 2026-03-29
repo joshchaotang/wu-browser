@@ -27,6 +27,8 @@ import { executeAdapterCommand, listAdapters, loadBuiltinAdapters } from '../ada
 import { findBySemantics } from '../dom/semantics.js';
 import { audit, info } from '../utils/logger.js';
 import { detectModel, getCurrentProfile, getDetectionSource } from '../model-sense/index.js';
+import { getLegendIfNeeded } from '../snapshot/session-legend.js';
+import { progressiveSnapshot, type ProgressiveLayer } from '../snapshot/progressive.js';
 
 // Session tracking
 const startTime = Date.now();
@@ -41,7 +43,7 @@ function uptimeStr(): string {
 export function createMcpServer(): McpServer {
   const server = new McpServer({
     name: 'wu-browser',
-    version: '1.5.0',
+    version: '1.6.0',
   });
 
   // ─── 輔助：取得當前 URL ──────────────────────────────────────
@@ -93,9 +95,10 @@ export function createMcpServer(): McpServer {
       selector: z.string().optional().describe('CSS selector to limit scope'),
       outputFormat: z.enum(['text', 'json']).default('text').describe('Output format: "text" (default) or "json"'),
       snapshotFormat: z.enum(['rich', 'ucf']).default('rich').describe('Snapshot format: "rich" (detailed) or "ucf" (ultra-compact, ~5 tokens/element)'),
+      progressive: z.number().min(1).max(3).optional().describe('Progressive layer (1=core, 2=more, 3=all). Returns most important elements first.'),
       contentBoundaries: z.boolean().default(false).describe('Wrap output in content boundary markers for prompt injection safety'),
     },
-  }, async ({ mode, maxTokens, selector, outputFormat, snapshotFormat, contentBoundaries }) => {
+  }, async ({ mode, maxTokens, selector, outputFormat, snapshotFormat, progressive, contentBoundaries }) => {
     // Use profile default if not explicitly set
     const profile = getCurrentProfile();
     const format = snapshotFormat === 'rich' ? (profile.defaultFormat as any) : snapshotFormat;
@@ -104,11 +107,21 @@ export function createMcpServer(): McpServer {
     const cost = getTokenCost(result.tokenCount);
 
     let text: string;
-    if (outputFormat === 'json') {
+    if (progressive && result.rawElements) {
+      // Progressive mode: use layered output
+      const layer = progressive as ProgressiveLayer;
+      const prog = progressiveSnapshot(result.rawElements, result.url, result.title, layer);
+      const legend = (format === 'ucf') ? getLegendIfNeeded() : null;
+      const legendPrefix = legend ? legend + '\n' : '';
+      text = `${legendPrefix}${prog.text}\n[_tokenCost: this=${prog.tokenCount} session=${cost.sessionTotal} avg=${cost.avgTokensPerSnapshot}/snap]`;
+    } else if (outputFormat === 'json') {
       const jsonResult = snapshotToJson(result, mode);
       text = JSON.stringify({ ...jsonResult, _tokenCost: cost }, null, 2);
     } else {
-      text = `${result.tree}\n[_tokenCost: this=${cost.thisAction} session=${cost.sessionTotal} avg=${cost.avgTokensPerSnapshot}/snap]`;
+      // Prepend UCF legend on first UCF snapshot in session
+      const legend = (format === 'ucf') ? getLegendIfNeeded() : null;
+      const legendPrefix = legend ? legend + '\n' : '';
+      text = `${legendPrefix}${result.tree}\n[_tokenCost: this=${cost.thisAction} session=${cost.sessionTotal} avg=${cost.avgTokensPerSnapshot}/snap]`;
     }
 
     if (contentBoundaries) {

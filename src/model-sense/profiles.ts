@@ -26,6 +26,8 @@ export interface ModelProfile {
   pruningStrategy: 'aggressive' | 'balanced' | 'minimal';
   /** 預設輸出格式：'rich' or 'ucf' */
   defaultFormat: 'rich' | 'ucf';
+  /** 是否預設啟用 progressive snapshot */
+  progressive?: boolean;
 }
 
 /**
@@ -81,6 +83,7 @@ export const BUILTIN_PROFILES: Record<string, ModelProfile> = {
     snapshotFormat: { includeHref: false, includeRegion: false, refFormat: 'compact', depthLimit: 3 },
     pruningStrategy: 'aggressive',
     defaultFormat: 'ucf',
+    progressive: true,
   },
   'gemini-2.5-pro': {
     name: 'gemini-2.5-pro',
@@ -108,6 +111,7 @@ export const BUILTIN_PROFILES: Record<string, ModelProfile> = {
     snapshotFormat: { includeHref: false, includeRegion: false, refFormat: 'compact', depthLimit: 2 },
     pruningStrategy: 'aggressive',
     defaultFormat: 'ucf',
+    progressive: true,
   },
   'local-32k': {
     name: 'local-32k',

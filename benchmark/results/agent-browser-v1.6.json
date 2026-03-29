@@ -1,0 +1,14 @@
+[
+  {
+    "scenario": "S1: Google homepage",
+    "tokens": 259
+  },
+  {
+    "scenario": "S3: Google search",
+    "tokens": 1859
+  },
+  {
+    "scenario": "S4: GitHub repo",
+    "tokens": 4382
+  }
+]

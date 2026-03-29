@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatUCF, formatUCFElement, decodeRoleCode } from '../src/snapshot/ucf-formatter.js';
+import { formatUCF, formatUCFElement, decodeRoleCode, decodeStateCode } from '../src/snapshot/ucf-formatter.js';
 import { estimateTokens } from '../src/utils/token-counter.js';
 import { type RawElement } from '../src/dom/pruner.js';
 
@@ -49,16 +49,17 @@ describe('UCF formatter', () => {
     expect(result.text).not.toContain('href');
   });
 
-  it('should truncate long names to 20 chars', () => {
+  it('should truncate long names by token budget (8 tokens max)', () => {
     const longNameEl: RawElement[] = [
       { ref: '@e1', role: 'link', name: 'This is a very long element name that should be truncated' },
     ];
     const result = formatUCF(longNameEl, 'https://example.com/', 'Test');
     expect(result.text).toContain('…');
-    // Name part should be <= 21 chars (20 + …)
+    // Name part should be within token budget
     const bodyLine = result.text.split('\n')[1];
     const namePart = bodyLine.split(' ').slice(1).join(' ');
-    expect(namePart.length).toBeLessThanOrEqual(21);
+    const nameTokens = estimateTokens(namePart);
+    expect(nameTokens).toBeLessThanOrEqual(10); // 8 + some overhead for …
   });
 
   it('should skip elements with no name/type/placeholder', () => {
@@ -84,9 +85,9 @@ describe('UCF formatter', () => {
 });
 
 describe('UCF token efficiency', () => {
-  it('Google homepage (15 elements) should be < 100 tokens', () => {
+  it('Google homepage (15 elements) should be < 130 tokens (with domain hints)', () => {
     const result = formatUCF(googleElements, 'https://www.google.com/', 'Google');
-    expect(result.tokenCount).toBeLessThan(100);
+    expect(result.tokenCount).toBeLessThan(130);
     console.log(`UCF Google homepage (15 elements): ${result.tokenCount} tokens = ${(result.tokenCount / result.elementCount).toFixed(1)} t/el`);
   });
 
@@ -169,5 +170,200 @@ describe('UCF formatUCFElement', () => {
   it('should handle iframe refs', () => {
     const el: RawElement = { ref: '@f1.e3', role: 'link', name: 'Link in iframe' };
     expect(formatUCFElement(el)).toBe('f1.e3:a Link in iframe');
+  });
+});
+
+// ─── v1.6 State Codes ────────────────────────────────────────
+
+describe('UCF state codes', () => {
+  it('checked checkbox shows ✓', () => {
+    const el: RawElement = { ref: '@e1', role: 'checkbox', name: 'Remember me', checked: 'true' };
+    expect(formatUCFElement(el)).toBe('e1:k✓ Remember me');
+  });
+
+  it('unchecked checkbox shows -', () => {
+    const el: RawElement = { ref: '@e2', role: 'checkbox', name: 'Subscribe', checked: 'false' };
+    expect(formatUCFElement(el)).toBe('e2:k- Subscribe');
+  });
+
+  it('disabled button shows ○', () => {
+    const el: RawElement = { ref: '@e3', role: 'button', name: 'Submit', disabled: true };
+    expect(formatUCFElement(el)).toBe('e3:b○ Submit');
+  });
+
+  it('required input shows !', () => {
+    const el: RawElement = { ref: '@e4', role: 'textbox', name: 'Email', type: 'email', required: true };
+    expect(formatUCFElement(el)).toBe('e4:c![email] Email');
+  });
+
+  it('expanded element shows ✓', () => {
+    const el: RawElement = { ref: '@e5', role: 'button', name: 'Menu', expanded: 'true' };
+    expect(formatUCFElement(el)).toBe('e5:b✓ Menu');
+  });
+
+  it('collapsed element shows -', () => {
+    const el: RawElement = { ref: '@e6', role: 'button', name: 'Menu', expanded: 'false' };
+    expect(formatUCFElement(el)).toBe('e6:b- Menu');
+  });
+
+  it('no state code for stateless elements', () => {
+    const el: RawElement = { ref: '@e7', role: 'link', name: 'Gmail' };
+    expect(formatUCFElement(el)).toBe('e7:a Gmail');
+  });
+
+  it('combined states: checked + required', () => {
+    const el: RawElement = { ref: '@e8', role: 'checkbox', name: 'Agree', checked: 'true', required: true };
+    expect(formatUCFElement(el)).toBe('e8:k✓! Agree');
+  });
+
+  it('form page UCF should include state codes', () => {
+    const formEls: RawElement[] = [
+      { ref: '@e1', role: 'textbox', name: 'Email', type: 'email', required: true, region: 'main' },
+      { ref: '@e2', role: 'textbox', name: 'Password', type: 'password', required: true, region: 'main' },
+      { ref: '@e3', role: 'combobox', name: 'Country: Taiwan', region: 'main' },
+      { ref: '@e4', role: 'checkbox', name: 'Remember me', checked: 'true', region: 'main' },
+      { ref: '@e5', role: 'checkbox', name: 'Subscribe', checked: 'false', region: 'main' },
+      { ref: '@e6', role: 'radio', name: 'Free', checked: 'true', region: 'main' },
+      { ref: '@e7', role: 'radio', name: 'Pro', checked: 'false', region: 'main' },
+      { ref: '@e8', role: 'button', name: 'Sign Up', region: 'main' },
+      { ref: '@e9', role: 'button', name: 'Reset', disabled: true, region: 'main' },
+    ];
+    const result = formatUCF(formEls, 'https://example.com/register', 'Registration');
+    expect(result.text).toContain('e1:c![email] Email');
+    expect(result.text).toContain('e4:k✓ Remember me');
+    expect(result.text).toContain('e5:k- Subscribe');
+    expect(result.text).toContain('e9:b○ Reset');
+    // Token cost: form with states should be reasonable
+    console.log(`Form UCF (${result.elementCount} elements with states): ${result.tokenCount} tokens`);
+  });
+
+  it('stateless page should have 0 token increase from state codes', () => {
+    // Google homepage elements have no states
+    const result = formatUCF(googleElements, 'https://www.google.com/', 'Google');
+    // No state codes should appear
+    expect(result.text).not.toContain('✓');
+    expect(result.text).not.toContain('○');
+    expect(result.text).not.toContain('!');
+    // The - character appears in names, so we check more carefully
+    const body = result.text.split('\n')[1];
+    const entries = body.split('|');
+    for (const entry of entries) {
+      const colonIdx = entry.indexOf(':');
+      if (colonIdx === -1) continue;
+      const afterColon = entry.substring(colonIdx + 1);
+      // Role code is 1 char (or h1/h2), next char should be space or [
+      const roleCode = afterColon.match(/^[a-z](?:\d)?/)?.[0] ?? '';
+      const afterRole = afterColon.substring(roleCode.length);
+      expect(afterRole).toMatch(/^[\s\[]/);
+    }
+  });
+
+  it('decodeStateCode should decode all codes', () => {
+    expect(decodeStateCode('✓')).toEqual(['checked/expanded']);
+    expect(decodeStateCode('-')).toEqual(['unchecked/collapsed']);
+    expect(decodeStateCode('○')).toEqual(['disabled']);
+    expect(decodeStateCode('!')).toEqual(['required']);
+    expect(decodeStateCode('✓!')).toEqual(['checked/expanded', 'required']);
+    expect(decodeStateCode('')).toEqual([]);
+  });
+});
+
+// ─── v1.6 Domain Hints ──────────────────────────────────────
+
+describe('UCF domain hints', () => {
+  it('external links should have →domain hint', () => {
+    const els: RawElement[] = [
+      { ref: '@e1', role: 'link', name: 'Gmail', href: 'https://mail.google.com/mail' },
+      { ref: '@e2', role: 'link', name: 'Privacy', href: 'https://policies.google.com/privacy' },
+    ];
+    const result = formatUCF(els, 'https://www.google.com/', 'Google');
+    expect(result.text).toContain('e1:a Gmail→mail.google');
+    expect(result.text).toContain('e2:a Privacy→policies.google');
+  });
+
+  it('same-domain links should NOT have domain hint', () => {
+    const els: RawElement[] = [
+      { ref: '@e1', role: 'link', name: 'Images', href: 'https://www.google.com/imghp' },
+    ];
+    const result = formatUCF(els, 'https://www.google.com/', 'Google');
+    expect(result.text).toContain('e1:a Images');
+    expect(result.text).not.toContain('→');
+  });
+
+  it('links with # or javascript: href should NOT have hint', () => {
+    // These get filtered in DOM extraction (no href set), test with no href
+    const els: RawElement[] = [
+      { ref: '@e1', role: 'link', name: 'Toggle' },
+    ];
+    const result = formatUCF(els, 'https://example.com/', 'Test');
+    expect(result.text).not.toContain('→');
+  });
+
+  it('subdomain of page domain DOES get hint (strict matching)', () => {
+    const els: RawElement[] = [
+      { ref: '@e1', role: 'link', name: 'API', href: 'https://api.example.com/docs' },
+    ];
+    const result = formatUCF(els, 'https://example.com/', 'Test');
+    // Strict match: api.example.com ≠ example.com → gets hint
+    expect(result.text).toContain('→api.example');
+  });
+
+  it('domain hints can be disabled', () => {
+    const els: RawElement[] = [
+      { ref: '@e1', role: 'link', name: 'Gmail', href: 'https://mail.google.com/mail' },
+    ];
+    const result = formatUCF(els, 'https://www.google.com/', 'Google', { domainHints: false });
+    expect(result.text).not.toContain('→');
+  });
+
+  it('Google homepage with domain hints should stay under 500 tokens', () => {
+    const result = formatUCF(googleElements, 'https://www.google.com/', 'Google');
+    expect(result.tokenCount).toBeLessThan(500);
+    console.log(`Google homepage UCF with domain hints: ${result.tokenCount} tokens`);
+  });
+
+  it('non-link elements should never get domain hints', () => {
+    const els: RawElement[] = [
+      { ref: '@e1', role: 'button', name: 'Submit', href: 'https://other.com/action' },
+    ];
+    const result = formatUCF(els, 'https://example.com/', 'Test');
+    expect(result.text).not.toContain('→');
+  });
+});
+
+// ─── v1.6 Smart Name Truncation ─────────────────────────────
+
+describe('UCF smart truncation', () => {
+  it('Chinese names should be truncated by tokens, not chars', () => {
+    const els: RawElement[] = [
+      { ref: '@e1', role: 'button', name: '這是一個非常長的中文按鈕名稱需要被截斷', region: 'main' },
+    ];
+    const result = formatUCF(els, 'https://example.com/', 'Test');
+    const body = result.text.split('\n')[1];
+    // Extract name part (after "e1:b ")
+    const namePart = body.replace(/^e1:b\s*/, '');
+    const tokens = estimateTokens(namePart);
+    expect(tokens).toBeLessThanOrEqual(10);
+    expect(result.text).toContain('…');
+  });
+
+  it('short English names should NOT be truncated', () => {
+    const els: RawElement[] = [
+      { ref: '@e1', role: 'button', name: 'Submit', region: 'main' },
+    ];
+    const result = formatUCF(els, 'https://example.com/', 'Test');
+    expect(result.text).toContain('e1:b Submit');
+    expect(result.text).not.toContain('…');
+  });
+
+  it('mixed CJK/English should be truncated correctly', () => {
+    const els: RawElement[] = [
+      { ref: '@e1', role: 'link', name: 'Google 帳戶：test.user@gmail.com的個人資料設定', href: '/profile', region: 'main' },
+    ];
+    const result = formatUCF(els, 'https://example.com/', 'Test');
+    const body = result.text.split('\n')[1];
+    const namePart = body.replace(/^e1:a\s*/, '');
+    const tokens = estimateTokens(namePart);
+    expect(tokens).toBeLessThanOrEqual(10);
   });
 });
