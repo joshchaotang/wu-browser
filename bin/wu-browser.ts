@@ -61,6 +61,7 @@ program
   .option('-c, --content', 'Content mode')
   .option('-f, --full', 'Full mode')
   .option('--max-tokens <n>', 'Max tokens', '1500')
+  .option('--max-output <n>', 'Alias for --max-tokens (small model friendly)')
   .option('--selector <sel>', 'Limit to CSS selector')
   .option('--json', 'Output as JSON')
   .option('--jq <expr>', 'Filter JSON output with jq expression')
@@ -77,9 +78,10 @@ program
     }
 
     const mode = opts.content ? 'content' : opts.full ? 'full' : 'interactive';
+    const tokenBudget = parseInt(opts.maxOutput ?? opts.maxTokens);
     const result = await snapshot({
       mode,
-      maxTokens: parseInt(opts.maxTokens),
+      maxTokens: tokenBudget,
       selector: opts.selector,
     });
 
