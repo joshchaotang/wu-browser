@@ -9,6 +9,7 @@ import { getClient } from '../browser/connection.js';
 import { audit, debug } from '../utils/logger.js';
 import { listTabs } from '../browser/session.js';
 import { miniSnapshot, sessionStats } from './snapshot.js';
+import { updatePruningContext } from '../snapshot/context-pruner.js';
 
 export interface ActionResult {
   success: boolean;
@@ -95,6 +96,7 @@ export async function click(ref: string): Promise<ActionResult> {
   const newTab = tabsAfter.find(t => !tabsBefore.find(b => b.id === t.id));
 
   audit('CLICK', `${ref}`, '[YELLOW:ALLOWED]');
+  updatePruningContext('click', `button:${ref}`, afterUrl);
 
   // Mini-snapshot: URL change + dialog detection
   const mini = await miniSnapshot();
@@ -179,6 +181,7 @@ export async function typeText(
   await waitForStable(500);
 
   audit('TYPE', `${ref} "${text.substring(0, 20)}"`, '[YELLOW:ALLOWED]');
+  updatePruningContext('type', `textbox:${ref}`, undefined);
 
   // Mini-snapshot: check for dialogs after typing
   const mini = await miniSnapshot();
@@ -235,6 +238,7 @@ export async function navigate(url: string): Promise<ActionResult> {
   await waitForLoad();
 
   const newUrl = await getCurrentUrl();
+  updatePruningContext('navigate', undefined, newUrl);
 
   return {
     success: true,

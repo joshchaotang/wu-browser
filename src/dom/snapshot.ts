@@ -14,6 +14,7 @@ import { audit, debug } from '../utils/logger.js';
 import { getCurrentProfile, type ModelProfile } from '../model-sense/index.js';
 import { type SnapshotFormatConfig } from '../model-sense/profiles.js';
 import { formatUCF } from '../snapshot/ucf-formatter.js';
+import { contextAwarePrune, getPruningContext } from '../snapshot/context-pruner.js';
 
 export type SnapshotFormat = 'rich' | 'compact' | 'ucf';
 
@@ -943,8 +944,11 @@ async function extractInteractive(
   let domainIncrementalMode = false;
   let changedElements = allRawElements.length;
 
+  // Context-aware reorder: prioritize elements based on last action
+  const reorderedElements = contextAwarePrune(allRawElements, getPruningContext());
+
   // Prune elements (default path) — use effective maxTokens from profile
-  const { elements, truncated, truncatedPercent, totalElements } = pruneElements(allRawElements, effectiveMaxTokens, fmt);
+  const { elements, truncated, truncatedPercent, totalElements } = pruneElements(reorderedElements, effectiveMaxTokens, fmt);
 
   const lines: string[] = [];
 
