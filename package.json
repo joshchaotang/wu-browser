@@ -1,21 +1,36 @@
 {
   "name": "wu-browser",
-  "version": "1.0.0",
-  "description": "The missing browser layer for Claude. DOM-based, incremental snapshots, 4-level permissions.",
-  "keywords": ["claude", "mcp", "browser", "automation", "ai-agent", "dom", "accessibility-tree", "cdp"],
-  "repository": "https://github.com/joshchaotang/wu-browser",
+  "version": "1.1.0",
+  "description": "The missing browser layer for Claude. Incremental snapshots save 92% tokens.",
+  "keywords": [
+    "claude", "mcp", "browser", "automation", "ai-agent",
+    "dom", "accessibility-tree", "incremental-snapshot",
+    "token-efficient", "browser-automation"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joshchaotang/wu-browser"
+  },
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
-    "wu-browser": "dist/bin/wu-browser.js"
+    "wu-browser": "./dist/bin/wu-browser.js"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "CONTRIBUTING.md"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",
@@ -33,6 +48,6 @@
     "vitest": "^4.1.2"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=18"
   }
 }

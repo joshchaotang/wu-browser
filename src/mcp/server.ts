@@ -38,7 +38,7 @@ function uptimeStr(): string {
 export function createMcpServer(): McpServer {
   const server = new McpServer({
     name: 'wu-browser',
-    version: '1.0.0',
+    version: '1.1.0',
   });
 
   // ─── 輔助：取得當前 URL ──────────────────────────────────────

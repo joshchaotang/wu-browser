@@ -3,4 +3,5 @@ dist/
 *.log
 .wu-browser/
 /tmp/wu-browser-*
+*.tgz
 .DS_Store

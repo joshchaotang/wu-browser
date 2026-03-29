@@ -1,0 +1,14 @@
+src/
+tests/
+bin/
+.claude/
+scripts/
+TEST_REPORT.md
+tsconfig.json
+vitest.config.ts
+install.sh
+*.log
+.wu-browser/
+/tmp/wu-browser-*
+*.tgz
+.git/
