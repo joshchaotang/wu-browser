@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.4.0 (2026-03-29)
+
+### New Features
+- **ModelSense**: Intelligent LLM version adaptation — 9 builtin profiles (Claude/GPT/Gemini/local)
+  - `--model` flag on CLI and MCP
+  - `wu-browser calibrate` auto-calibration
+  - `wu-browser model --list` to see all profiles
+  - gpt-4o-mini profile: 558t vs Playwright 544t (nearly matched)
+  - local-8k profile: 339t on Google homepage (63% less than default)
+- **Encrypted Session Persistence**: `wu-browser session save/restore/list/delete`
+  - AES-256-GCM encryption with `WU_BROWSER_ENCRYPTION_KEY`
+  - Saves cookies + localStorage
+- **Security Config**: `~/.wu-browser/security.json` with human-friendly settings
+  - `permissionLevel`: strict / balanced / permissive
+  - `domainRules`: wildcard support (`*.bank.com → BLACK`)
+  - CLI: `wu-browser security show/set/allow/block`
+
+### Benchmark
+- S1 single read: default 908t, mini profile 558t, Playwright 544t
+- S2 same-page re-read: 72t vs Playwright 544t (87% savings)
+- S4 4-step workflow: 2,984t vs Playwright 14,736t (80% savings)
+- S7 ModelSense: Google search results opus 4,560t → local-8k 358t (92% savings)
+
 ## v1.3.0 (2026-03-29)
 
 ### New Features
