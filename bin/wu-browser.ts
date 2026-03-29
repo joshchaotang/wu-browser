@@ -348,6 +348,112 @@ siteCmd
     process.exit(0);
   });
 
+// ─── batch ────────────────────────────────────────────────────
+
+program
+  .command('batch')
+  .description('Execute multiple commands from stdin JSON array. E.g. [["snap","-i"],["click","@e1"]]')
+  .option('--json', 'Output results as JSON array')
+  .option('--bail', 'Stop on first failure')
+  .action(async (opts) => {
+    await ensureConnected();
+
+    // Load snapshot cache
+    try {
+      const cacheData = readFileSync(SNAPSHOT_CACHE_PATH, 'utf-8');
+      loadSnapshotCache(JSON.parse(cacheData));
+    } catch {}
+
+    // Read stdin
+    let input = '';
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) {
+      chunks.push(chunk as Buffer);
+    }
+    input = Buffer.concat(chunks).toString('utf-8').trim();
+
+    let commands: string[][];
+    try {
+      commands = JSON.parse(input);
+      if (!Array.isArray(commands)) throw new Error('not array');
+    } catch {
+      console.error('Invalid JSON array on stdin. Expected: [["snap","-i"],["click","@e1"]]');
+      process.exit(1);
+    }
+
+    const results: Array<{ command: string[]; success: boolean; output: string }> = [];
+
+    for (const cmd of commands) {
+      const [action, ...args] = cmd;
+      let output = '';
+      let success = true;
+
+      try {
+        switch (action) {
+          case 'snap': {
+            const mode = args.includes('-c') ? 'content' : args.includes('-f') ? 'full' : 'interactive';
+            const maxIdx = args.indexOf('--max-tokens');
+            const maxTokens = maxIdx >= 0 ? parseInt(args[maxIdx + 1]) : 1500;
+            const result = await snapshot({ mode, maxTokens });
+            output = opts.json ? JSON.stringify(snapshotToJson(result, mode)) : result.tree;
+            break;
+          }
+          case 'click': {
+            const result = await click(args[0]);
+            output = result.context ?? result.message;
+            success = result.success;
+            break;
+          }
+          case 'type': {
+            const result = await typeText(args[0], args[1]);
+            output = result.context ?? result.message;
+            success = result.success;
+            break;
+          }
+          case 'nav': {
+            const result = await navigate(args[0]);
+            output = result.message;
+            success = result.success;
+            break;
+          }
+          default:
+            output = `Unknown command: ${action}`;
+            success = false;
+        }
+      } catch (err) {
+        output = `Error: ${err}`;
+        success = false;
+      }
+
+      results.push({ command: cmd, success, output });
+
+      if (!success && opts.bail) {
+        results.push({ command: ['(remaining commands skipped)'], success: false, output: 'bail' });
+        break;
+      }
+    }
+
+    // Save cache
+    try {
+      writeFileSync(SNAPSHOT_CACHE_PATH, JSON.stringify(saveSnapshotCache()), 'utf-8');
+    } catch {}
+
+    if (opts.json) {
+      console.log(JSON.stringify(results, null, 2));
+    } else {
+      for (const r of results) {
+        console.log(`[${r.success ? '✅' : '❌'}] ${r.command.join(' ')}`);
+        if (r.output && r.output !== 'bail') {
+          const preview = r.output.split('\n').slice(0, 3).join('\n');
+          console.log(preview);
+        }
+        console.log('');
+      }
+    }
+
+    process.exit(results.every(r => r.success) ? 0 : 1);
+  });
+
 // ─── 預設行為（無子命令）────────────────────────────────────────
 
 program.action(async () => {
