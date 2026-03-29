@@ -523,6 +523,56 @@ const EXTRACT_INTERACTIVE = `(function() {
   }
   walkShadowRoots(document, 0);
 
+  // Walk same-origin iframes (depth limit: 3)
+  function walkIframes(doc, framePrefix, depth) {
+    if (depth > 3) return;
+    var iframes;
+    try {
+      iframes = Array.from(doc.querySelectorAll('iframe'));
+    } catch(e) { return; }
+
+    for (var fi = 0; fi < iframes.length; fi++) {
+      var iframe = iframes[fi];
+      var contentDoc;
+      try {
+        contentDoc = iframe.contentDocument;
+        if (!contentDoc) continue; // cross-origin
+      } catch(e) { continue; } // cross-origin security error
+
+      var fPrefix = framePrefix ? framePrefix + '.' + (fi + 1) : 'f' + (fi + 1);
+      try {
+        var iframeEls = Array.from(contentDoc.querySelectorAll(SELECTORS));
+        for (var k = 0; k < iframeEls.length; k++) {
+          var iel = iframeEls[k];
+          if (seen.has(iel)) continue;
+          seen.add(iel);
+          if (!isVisible(iel)) continue;
+          idx++;
+          var iref = '@' + fPrefix + '.e' + idx;
+          var irole = getRole(iel);
+          var iname = getAccessibleName(iel);
+          var iitem = {
+            ref: iref,
+            role: irole,
+            name: iname.substring(0, 100),
+            region: getRegion(iel),
+            iframe: fPrefix
+          };
+          var ihref = iel.getAttribute('href');
+          if (ihref && ihref !== '#' && ihref.indexOf('javascript:') !== 0) {
+            iitem.href = ihref.length > 60 ? ihref.substring(0, 60) + '..' : ihref;
+          }
+          window.__wuRefs[iref] = iel;
+          results.push(iitem);
+        }
+      } catch(e) {}
+
+      // Recurse into nested iframes
+      walkIframes(contentDoc, fPrefix, depth + 1);
+    }
+  }
+  walkIframes(document, '', 0);
+
   // Detect cookie banners (for reporting)
   var cookieSelectors = [
     '[class*="cookie"]','[id*="cookie"]',
