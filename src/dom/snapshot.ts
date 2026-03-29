@@ -11,6 +11,8 @@ import { getClient } from '../browser/connection.js';
 import { pruneElements, formatElement, type RawElement } from './pruner.js';
 import { estimateTokens } from '../utils/token-counter.js';
 import { audit, debug } from '../utils/logger.js';
+import { getCurrentProfile, type ModelProfile } from '../model-sense/index.js';
+import { type SnapshotFormatConfig } from '../model-sense/profiles.js';
 
 export interface SnapshotOptions {
   mode: 'interactive' | 'content' | 'full';
@@ -886,6 +888,12 @@ async function extractInteractive(
   const client = await getClient();
   const { Runtime, Page } = client;
 
+  // Get current ModelSense profile for format decisions
+  const profile = getCurrentProfile();
+  const fmt = profile.snapshotFormat;
+  // Use profile's optimalMaxTokens if caller used default
+  const effectiveMaxTokens = maxTokens === 1500 ? profile.optimalMaxTokens : maxTokens;
+
   let url = 'about:blank';
 
   try {
@@ -927,8 +935,8 @@ async function extractInteractive(
   let domainIncrementalMode = false;
   let changedElements = allRawElements.length;
 
-  // Prune elements (default path)
-  const { elements, truncated, truncatedPercent, totalElements } = pruneElements(allRawElements, maxTokens);
+  // Prune elements (default path) — use effective maxTokens from profile
+  const { elements, truncated, truncatedPercent, totalElements } = pruneElements(allRawElements, effectiveMaxTokens, fmt);
 
   const lines: string[] = [];
 
@@ -945,7 +953,7 @@ async function extractInteractive(
 
       if (inc.changed.length > 0) {
         for (const el of inc.changed) {
-          lines.push(formatElement(el));
+          lines.push(formatElement(el, fmt));
         }
       } else {
         lines.push('[無變化]');
@@ -969,7 +977,7 @@ async function extractInteractive(
         const domInc = computeDomainIncremental(allRawElements, domainCache);
         if (domInc.isDomainIncremental && domInc.sharedCount > 0) {
           // Prune only the new (non-shared) elements
-          const { elements: prunedNew } = pruneElements(domInc.newElements, maxTokens);
+          const { elements: prunedNew } = pruneElements(domInc.newElements, effectiveMaxTokens, fmt);
           domainIncrementalMode = true;
           changedElements = prunedNew.length;
 
@@ -978,7 +986,7 @@ async function extractInteractive(
           lines.push(`[域級增量 · ${domain} · ${domInc.sharedCount} 個共用元素省略 · ${prunedNew.length} 個新元素]`);
 
           for (const el of prunedNew) {
-            lines.push(formatElement(el));
+            lines.push(formatElement(el, fmt));
           }
 
           if (domInc.sharedCount > 0) {
@@ -1011,13 +1019,13 @@ async function extractInteractive(
           if (diff.changed.length > 0) {
             lines.push('[變化元素]');
             for (const c of diff.changed) {
-              lines.push(formatElement(c.current));
+              lines.push(formatElement(c.current, fmt));
             }
           }
           if (diff.added.length > 0) {
             lines.push('[新增元素]');
             for (const a of diff.added) {
-              lines.push(formatElement(a));
+              lines.push(formatElement(a, fmt));
             }
           }
           if (diff.unchanged > 0) {
@@ -1036,7 +1044,7 @@ async function extractInteractive(
     lines.push('---');
 
     for (const el of elements) {
-      lines.push(formatElement(el));
+      lines.push(formatElement(el, fmt));
     }
 
     lines.push('---');

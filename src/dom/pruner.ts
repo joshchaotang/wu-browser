@@ -6,6 +6,7 @@
  */
 
 import { estimateTokens } from '../utils/token-counter.js';
+import { type SnapshotFormatConfig } from '../model-sense/profiles.js';
 
 export interface RawElement {
   ref: string;
@@ -45,7 +46,8 @@ export function isJunkSelector(selector: string): boolean {
  */
 export function pruneElements(
   elements: RawElement[],
-  maxTokens: number
+  maxTokens: number,
+  fmt?: SnapshotFormatConfig
 ): { elements: RawElement[]; truncated: boolean; truncatedPercent: number; totalElements: number } {
   if (elements.length === 0) {
     return { elements: [], truncated: false, truncatedPercent: 0, totalElements: 0 };
@@ -73,7 +75,7 @@ export function pruneElements(
 
   // 用 tiktoken 精確計算元素格式化後的 token 消耗
   function elTokens(el: RawElement): number {
-    return estimateTokens(formatElement(el) + '\n');
+    return estimateTokens(formatElement(el, fmt) + '\n');
   }
 
   // 預留 header + footer 的 token 預算
@@ -101,10 +103,12 @@ export function pruneElements(
 }
 
 /** 格式化單個元素為壓縮文字表示 */
-export function formatElement(el: RawElement): string {
-  let line = `[${el.ref}] ${el.role} "${el.name}"`;
+export function formatElement(el: RawElement, fmt?: SnapshotFormatConfig): string {
+  // ref format: compact "@1" vs full "@e1"
+  const ref = fmt?.refFormat === 'compact' ? el.ref.replace(/@e/, '@') : el.ref;
+  let line = `[${ref}] ${el.role} "${el.name}"`;
   if (el.shadow) line += ' [shadow]';
-  if (el.href) line += ` href="${el.href}"`;
+  if (el.href && (fmt?.includeHref ?? true)) line += ` href="${el.href}"`;
   if (el.type) line += ` type=${el.type}`;
   if (el.placeholder) line += ` placeholder="${el.placeholder}"`;
   if (el.value) line += ` value="${el.value}"`;

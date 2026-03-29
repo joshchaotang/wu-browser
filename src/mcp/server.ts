@@ -26,6 +26,7 @@ import {
 import { executeAdapterCommand, listAdapters, loadBuiltinAdapters } from '../adapters/index.js';
 import { findBySemantics } from '../dom/semantics.js';
 import { audit, info } from '../utils/logger.js';
+import { detectModel, getCurrentProfile, getDetectionSource } from '../model-sense/index.js';
 
 // Session tracking
 const startTime = Date.now();

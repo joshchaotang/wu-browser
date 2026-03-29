@@ -10,3 +10,4 @@ export { connect, disconnect, isConnected, getClient } from './browser/connectio
 export { snapshot, getText, loadSnapshotCache, saveSnapshotCache, snapshotToJson } from './dom/snapshot.js';
 export { click, typeText, scroll, navigate, goBack, goForward } from './dom/actions.js';
 export { checkPermission } from './permissions/engine.js';
+export { detectModel, getCurrentProfile, getProfile, listProfiles, type ModelProfile } from './model-sense/index.js';

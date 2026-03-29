@@ -31,6 +31,7 @@ import { startMcpServer } from '../src/mcp/server.js';
 import { startHttpServer } from '../src/http/server.js';
 import { loadBuiltinAdapters } from '../src/adapters/index.js';
 import { findBySemantics } from '../src/dom/semantics.js';
+import { detectModel, listProfiles, getCurrentProfile } from '../src/model-sense/index.js';
 
 // Load adapters at startup
 await loadBuiltinAdapters();
@@ -50,7 +51,13 @@ program
   .option('--mcp', 'Start MCP stdio server (default)')
   .option('--http', 'Start HTTP API server')
   .option('--port <port>', 'HTTP server port', '9867')
-  .option('--chrome-port <port>', 'Chrome remote debugging port', '9222');
+  .option('--chrome-port <port>', 'Chrome remote debugging port', '9222')
+  .option('--model <name>', 'LLM model profile (e.g. claude-opus-4.6, gpt-4o, local-8k)')
+  .hook('preAction', () => {
+    // Detect model before any command runs
+    const opts = program.opts();
+    detectModel({ flag: opts.model });
+  });
 
 // ─── snap ──────────────────────────────────────────────────────
 
@@ -478,6 +485,77 @@ program
     }
 
     process.exit(results.every(r => r.success) ? 0 : 1);
+  });
+
+// ─── model ───────────────────────────────────────────────────
+
+program
+  .command('model')
+  .description('Show current ModelSense profile or list available profiles')
+  .option('--list', 'List all available profiles')
+  .action(async (opts) => {
+    if (opts.list) {
+      console.log('Available ModelSense profiles:\n');
+      const { BUILTIN_PROFILES } = await import('../src/model-sense/profiles.js');
+      for (const name of listProfiles()) {
+        const p = BUILTIN_PROFILES[name];
+        console.log(`  ${name}`);
+        console.log(`    context: ${(p.contextWindow / 1000).toFixed(0)}K · maxTokens: ${p.optimalMaxTokens} · pruning: ${p.pruningStrategy}`);
+        console.log(`    href: ${p.snapshotFormat.includeHref} · region: ${p.snapshotFormat.includeRegion} · ref: ${p.snapshotFormat.refFormat} · depth: ${p.snapshotFormat.depthLimit || '∞'}`);
+        console.log('');
+      }
+    } else {
+      const profile = getCurrentProfile();
+      console.log(`Current profile: ${profile.name}`);
+      console.log(`  Context window: ${(profile.contextWindow / 1000).toFixed(0)}K`);
+      console.log(`  Optimal maxTokens: ${profile.optimalMaxTokens}`);
+      console.log(`  Pruning: ${profile.pruningStrategy}`);
+      console.log(`  Format: href=${profile.snapshotFormat.includeHref} region=${profile.snapshotFormat.includeRegion} ref=${profile.snapshotFormat.refFormat}`);
+    }
+    process.exit(0);
+  });
+
+// ─── calibrate ───────────────────────────────────────────────
+
+program
+  .command('calibrate')
+  .description('Run ModelSense calibration against the current page')
+  .action(async () => {
+    await ensureConnected();
+
+    const profile = getCurrentProfile();
+    console.log(`Calibrating for ${profile.name}...\n`);
+
+    // Get raw elements from current page
+    const result = await snapshot({ mode: 'interactive', maxTokens: 10000 });
+    const elements = result.rawElements ?? [];
+
+    if (elements.length === 0) {
+      console.log('No elements found. Navigate to a page first.');
+      process.exit(1);
+    }
+
+    const { calibrate } = await import('../src/model-sense/calibrate.js');
+    const { formatElement: fmtEl, pruneElements: pruneEls } = await import('../src/dom/pruner.js');
+    const { estimateTokens: countTokens } = await import('../src/utils/token-counter.js');
+
+    const calResult = calibrate(
+      elements,
+      profile.name,
+      (els, p) => {
+        const { elements: pruned } = pruneEls(els as any, p.optimalMaxTokens, p.snapshotFormat);
+        const text = pruned.map(e => fmtEl(e, p.snapshotFormat)).join('\n');
+        return { tokenCount: countTokens(text), elementCount: pruned.length };
+      },
+    );
+
+    for (const r of calResult.results) {
+      const bar = r.savingsPercent > 0 ? ` (${r.savingsPercent}% less)` : '';
+      console.log(`  ${r.strategy}: ${r.tokenCount} tokens, ${r.elementCount} elements${bar}`);
+    }
+    console.log(`\n→ Recommended: ${calResult.recommended}`);
+    console.log(`Saved to ~/.wu-browser/calibration.json`);
+    process.exit(0);
   });
 
 // ─── 預設行為（無子命令）────────────────────────────────────────
