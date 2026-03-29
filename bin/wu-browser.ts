@@ -487,7 +487,66 @@ program
     process.exit(results.every(r => r.success) ? 0 : 1);
   });
 
-// ─── session ─────────────────────────────��───────────────────
+// ─── security ────────────────────────────────────────────────
+
+const securityCmd = program
+  .command('security')
+  .description('Security settings management');
+
+securityCmd
+  .command('show')
+  .description('Show current security settings')
+  .action(async () => {
+    const { loadSecurityConfig } = await import('../src/permissions/security-config.js');
+    const config = loadSecurityConfig();
+    console.log(`Permission level: ${config.permissionLevel}`);
+    console.log(`Content boundaries: ${config.contentBoundaries}`);
+    console.log(`Auto-close cookies: ${config.autoCloseCookies}`);
+    console.log(`Prompt injection detection: ${config.promptInjectionDetection}`);
+    const rules = Object.entries(config.domainRules);
+    if (rules.length > 0) {
+      console.log('\nDomain rules:');
+      for (const [domain, level] of rules) {
+        console.log(`  ${domain} → ${level}`);
+      }
+    } else {
+      console.log('\nNo custom domain rules.');
+    }
+    process.exit(0);
+  });
+
+securityCmd
+  .command('set <key> <value>')
+  .description('Set a security config value (permissionLevel, contentBoundaries, etc.)')
+  .action(async (key: string, value: string) => {
+    const { setConfigValue } = await import('../src/permissions/security-config.js');
+    const parsed = value === 'true' ? true : value === 'false' ? false : value;
+    setConfigValue(key as any, parsed);
+    console.log(`Set ${key} = ${parsed}`);
+    process.exit(0);
+  });
+
+securityCmd
+  .command('allow <domain>')
+  .description('Set domain to GREEN (always allow)')
+  .action(async (domain: string) => {
+    const { setDomainRule } = await import('../src/permissions/security-config.js');
+    setDomainRule(domain, 'GREEN');
+    console.log(`${domain} → GREEN (always allow)`);
+    process.exit(0);
+  });
+
+securityCmd
+  .command('block <domain>')
+  .description('Set domain to BLACK (always block)')
+  .action(async (domain: string) => {
+    const { setDomainRule } = await import('../src/permissions/security-config.js');
+    setDomainRule(domain, 'BLACK');
+    console.log(`${domain} → BLACK (always block)`);
+    process.exit(0);
+  });
+
+// ─── session ─────────────────────────────────────────────────
 
 const sessionCmd = program
   .command('session')
