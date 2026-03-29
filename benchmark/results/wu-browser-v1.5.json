@@ -1,0 +1,23 @@
+{
+  "google_homepage": {
+    "rich": 908,
+    "rich_elements": 43,
+    "ucf": 433,
+    "ucf_elements": 43,
+    "rich_incremental": 72
+  },
+  "google_search": {
+    "rich": 4674,
+    "rich_elements": 125,
+    "ucf": 1752,
+    "ucf_elements": 125,
+    "rich_incremental": 89
+  },
+  "github_repo": {
+    "rich": 5087,
+    "rich_elements": 166,
+    "ucf": 1708,
+    "ucf_elements": 166,
+    "rich_incremental": 212
+  }
+}
