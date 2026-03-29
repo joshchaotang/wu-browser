@@ -60,6 +60,26 @@
 
 ---
 
+## v1.1 階段四：發佈準備
+
+測試日期：2026-03-29
+
+### 階段四測試結果
+
+| # | 測試項 | 預期 | 實際結果 | 通過 |
+|---|--------|------|---------|------|
+| 1 | `npm pack` | 產出 .tgz，< 5MB | wu-browser-1.1.0.tgz, 59KB | ✅ |
+| 2 | 全局安裝 .tgz | `wu-browser` 指令可用 | ✅ 安裝成功 | ✅ |
+| 3 | `wu-browser --version` | 1.1.0 | 1.1.0 | ✅ |
+| 4 | `wu-browser status` | 正常 | ✅ connected, 1 tab | ✅ |
+| 5 | `wu-browser snap -i`（全局版）| ~858 tokens | 906 tokens | ✅ |
+| 6 | `wu-browser site list`（全局版）| 3 adapters | ✅ google + github + form | ✅ |
+| 7 | git status | clean | ✅ | ✅ |
+
+**結論：全部 7 項通過，階段四完成。**
+
+---
+
 # Wu Browser v1.0 實測報告
 
 ---
