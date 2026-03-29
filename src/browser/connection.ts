@@ -1,6 +1,6 @@
 import CDP from 'chrome-remote-interface';
 import { info, warn, error, debug } from '../utils/logger.js';
-import { launchChrome } from './launcher.js';
+import { connectOrLaunch } from './launcher.js';
 
 export type CDPClient = CDP.Client;
 
@@ -58,7 +58,7 @@ export async function connect(opts: ConnectionOptions = {}): Promise<CDPClient> 
       if (attempt < maxRetries) {
         debug(`Connection failed, trying to launch Chrome...`);
         try {
-          await launchChrome(_port);
+          await connectOrLaunch(_port);
           await sleep(2000);
         } catch {
           await sleep(2000);

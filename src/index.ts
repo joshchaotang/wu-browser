@@ -7,6 +7,7 @@
 export { startMcpServer, createMcpServer } from './mcp/server.js';
 export { startHttpServer } from './http/server.js';
 export { connect, disconnect, isConnected, getClient } from './browser/connection.js';
+export { connectOrLaunch, getAvailableMemoryMB, cleanupTrackedProcesses } from './browser/launcher.js';
 export { snapshot, getText, loadSnapshotCache, saveSnapshotCache, snapshotToJson } from './dom/snapshot.js';
 export { click, typeText, scroll, navigate, goBack, goForward } from './dom/actions.js';
 export { checkPermission } from './permissions/engine.js';
