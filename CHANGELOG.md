@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.5.0 (2026-03-29)
+
+### Core Breakthrough
+- **UCF (Ultra-Compact Format)**: ~10 tokens/element (industry lowest)
+  - Single-letter role codes, pipe-separated, no href
+  - Google homepage: 433t (vs Playwright 544t, agent-browser 428t)
+  - `--format ucf` on CLI, `snapshotFormat: "ucf"` on MCP
+  - Auto-enabled for local-8k, local-32k, gpt-4o-mini profiles
+
+### New Features
+- **Context-Aware Pruning**: Adjusts element priority based on last action
+  - After type → boost search result links, demote nav/footer
+  - After click → boost main content area
+- **Predictive Structural Diff**: Lower threshold (50%) for pagination
+  - URL query-only changes (e.g. ?page=2) trigger structural diff more aggressively
+
+### Benchmark (三方公平對比)
+
+| 場景 | Wu UCF | Wu Rich | agent-browser | Playwright |
+|------|--------|---------|---------------|------------|
+| Google 首頁 | **433t** | 908t | 428t | 544t |
+| Google 搜尋 | **1,752t** | 4,674t | 3,981t | 8,356t |
+| GitHub repo | **1,708t** | 5,087t | 7,425t | N/A |
+| 同頁再讀 | **72t** | 72t | 428t | 544t |
+
 ## v1.4.0 (2026-03-29)
 
 ### New Features
