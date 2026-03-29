@@ -1,4 +1,4 @@
-import { exec } from 'child_process';
+import { exec, type ChildProcess } from 'child_process';
 import { promisify } from 'util';
 import { mkdirSync } from 'fs';
 import { homedir } from 'os';
@@ -6,6 +6,24 @@ import { join } from 'path';
 import { info, warn } from '../utils/logger.js';
 
 const execAsync = promisify(exec);
+
+/** Track launched Chrome processes for cleanup */
+const launchedProcesses: ChildProcess[] = [];
+
+function registerCleanup() {
+  const cleanup = () => {
+    for (const proc of launchedProcesses) {
+      if (proc.pid && !proc.killed) {
+        try { process.kill(proc.pid); } catch {}
+      }
+    }
+  };
+  process.on('exit', cleanup);
+  process.on('SIGINT', () => { cleanup(); process.exit(130); });
+  process.on('SIGTERM', () => { cleanup(); process.exit(143); });
+}
+
+let cleanupRegistered = false;
 
 const CHROME_PATHS = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -44,7 +62,13 @@ export async function launchChrome(port = 9222): Promise<void> {
   ].join(' ');
 
   info(`Launching Chrome: ${chromePath}`);
-  exec(`"${chromePath}" ${args}`);
+  const child = exec(`"${chromePath}" ${args}`);
+  child.unref();
+  launchedProcesses.push(child);
+  if (!cleanupRegistered) {
+    registerCleanup();
+    cleanupRegistered = true;
+  }
 
   // 等待 Chrome 啟動
   for (let i = 0; i < 15; i++) {
