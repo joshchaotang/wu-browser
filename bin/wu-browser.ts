@@ -23,12 +23,13 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { connect, isConnected } from '../src/browser/connection.js';
 import { launchChrome } from '../src/browser/launcher.js';
-import { snapshot, loadSnapshotCache, saveSnapshotCache, snapshotToJson } from '../src/dom/snapshot.js';
+import { snapshot, loadSnapshotCache, saveSnapshotCache, snapshotToJson, sessionStats, getTokenCost } from '../src/dom/snapshot.js';
 import { click, typeText, navigate } from '../src/dom/actions.js';
 import { listTabs } from '../src/browser/session.js';
 import { startMcpServer } from '../src/mcp/server.js';
 import { startHttpServer } from '../src/http/server.js';
 import { loadBuiltinAdapters } from '../src/adapters/index.js';
+import { findBySemantics } from '../src/dom/semantics.js';
 
 // Load adapters at startup
 await loadBuiltinAdapters();
@@ -40,7 +41,7 @@ const program = new Command();
 program
   .name('wu-browser')
   .description('Browser automation via CDP — MCP server + CLI')
-  .version('1.1.0');
+  .version('1.2.0');
 
 // ─── 全域選項 ────────────────────────────────────────────────────
 
@@ -109,6 +110,8 @@ program
       console.log(result.tree);
       console.log(`\n[Tokens: ~${result.tokenCount}]`);
     }
+    const cost = getTokenCost(result.tokenCount);
+    process.stderr.write(`[wu-browser] tokens: ${cost.thisAction} · session: ${cost.sessionTotal} · avg: ${cost.avgTokensPerSnapshot}/snap\n`);
     process.exit(0);
   });
 
@@ -201,6 +204,44 @@ program
     } catch (err) {
       console.error(`❌ Failed: ${err}`);
       process.exit(1);
+    }
+    process.exit(0);
+  });
+
+// ─── find ─────────────────────────────────────────────────────
+
+program
+  .command('find')
+  .description('Find elements by semantic meaning (role + name)')
+  .option('--role <role>', 'Element role: button, link, textbox, etc.')
+  .option('--name <name>', 'Element name/label')
+  .option('--contains <text>', 'Element name contains this text')
+  .option('--type <type>', 'Input type')
+  .option('--near <name>', 'Find elements near this element')
+  .action(async (opts) => {
+    await ensureConnected();
+    const result = await snapshot({ mode: 'interactive', maxTokens: 3000 });
+    if (!result.rawElements || result.rawElements.length === 0) {
+      console.log('No elements found. Is a page loaded?');
+      process.exit(1);
+    }
+    const matches = findBySemantics(result.rawElements, {
+      role: opts.role,
+      name: opts.name,
+      contains: opts.contains,
+      type: opts.type,
+      near: opts.near,
+    });
+    if (matches.length === 0) {
+      console.log(`No elements match: role=${opts.role ?? '*'} name=${opts.name ?? '*'}`);
+      process.exit(0);
+    }
+    for (const m of matches.slice(0, 10)) {
+      const parts = [`${m.ref} ${m.role} "${m.name}"`];
+      if (m.href) parts.push(`href="${m.href}"`);
+      if (m.type) parts.push(`type=${m.type}`);
+      parts.push(`(score:${m.score})`);
+      console.log(parts.join(' '));
     }
     process.exit(0);
   });

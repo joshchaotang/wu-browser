@@ -74,21 +74,111 @@ interface PreviousSnapshot {
 // In-memory store: tab URL → previous snapshot
 const prevSnapshots = new Map<string, PreviousSnapshot>();
 
+// ─── Domain-level incremental ─────────────────────────────────
+
+interface DomainCache {
+  domain: string;
+  elementHashes: Set<string>;
+  lastURL: string;
+  timestamp: number;
+}
+
+const domainCaches = new Map<string, DomainCache>();
+
+function getElementHash(el: RawElement): string {
+  return `${el.role}:${el.name}:${el.href ?? ''}`;
+}
+
+function getDomain(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
+function computeDomainIncremental(
+  currentEls: RawElement[],
+  cache: DomainCache
+): { isDomainIncremental: boolean; newElements: RawElement[]; sharedCount: number } {
+  const newElements: RawElement[] = [];
+  let sharedCount = 0;
+
+  for (const el of currentEls) {
+    if (cache.elementHashes.has(getElementHash(el))) {
+      sharedCount++;
+    } else {
+      newElements.push(el);
+    }
+  }
+
+  const sharedRatio = currentEls.length > 0 ? sharedCount / currentEls.length : 0;
+  return {
+    isDomainIncremental: sharedRatio >= 0.3,
+    newElements,
+    sharedCount,
+  };
+}
+
+function updateDomainCache(domain: string, elements: RawElement[], url: string): void {
+  const hashes = new Set(elements.map(getElementHash));
+  domainCaches.set(domain, {
+    domain,
+    elementHashes: hashes,
+    lastURL: url,
+    timestamp: Date.now(),
+  });
+}
+
 /** Load snapshot cache from external storage (for CLI cross-process incremental) */
-export function loadSnapshotCache(data: Record<string, PreviousSnapshot>): void {
+export function loadSnapshotCache(data: {
+  snapshots?: Record<string, PreviousSnapshot>;
+  domains?: Record<string, { domain: string; elementHashes: string[]; lastURL: string; timestamp: number }>;
+}): void {
   prevSnapshots.clear();
-  for (const [key, val] of Object.entries(data)) {
-    prevSnapshots.set(key, val);
+  if (data.snapshots) {
+    for (const [key, val] of Object.entries(data.snapshots)) {
+      prevSnapshots.set(key, val);
+    }
+  }
+  // Legacy format support
+  if (!data.snapshots && !data.domains) {
+    for (const [key, val] of Object.entries(data as Record<string, PreviousSnapshot>)) {
+      prevSnapshots.set(key, val);
+    }
+  }
+  domainCaches.clear();
+  if (data.domains) {
+    for (const [key, val] of Object.entries(data.domains)) {
+      domainCaches.set(key, {
+        domain: val.domain,
+        elementHashes: new Set(val.elementHashes),
+        lastURL: val.lastURL,
+        timestamp: val.timestamp,
+      });
+    }
   }
 }
 
 /** Export snapshot cache for external storage */
-export function saveSnapshotCache(): Record<string, PreviousSnapshot> {
-  const result: Record<string, PreviousSnapshot> = {};
+export function saveSnapshotCache(): {
+  snapshots: Record<string, PreviousSnapshot>;
+  domains: Record<string, { domain: string; elementHashes: string[]; lastURL: string; timestamp: number }>;
+} {
+  const snapshots: Record<string, PreviousSnapshot> = {};
   for (const [key, val] of prevSnapshots.entries()) {
-    result[key] = val;
+    snapshots[key] = val;
   }
-  return result;
+  const domains: Record<string, { domain: string; elementHashes: string[]; lastURL: string; timestamp: number }> = {};
+  for (const [key, val] of domainCaches.entries()) {
+    domains[key] = {
+      domain: val.domain,
+      elementHashes: [...val.elementHashes],
+      lastURL: val.lastURL,
+      timestamp: val.timestamp,
+    };
+  }
+  return { snapshots, domains };
 }
 
 function elementKey(el: RawElement): string {
@@ -128,6 +218,23 @@ export const sessionStats = {
     url: string; tokenCount: number; elementCount: number; mode: string; timestamp: string;
   },
 };
+
+/** Generate token cost info for MCP responses */
+export function getTokenCost(thisActionTokens: number): {
+  thisAction: number;
+  sessionTotal: number;
+  snapshotsInSession: number;
+  avgTokensPerSnapshot: number;
+} {
+  return {
+    thisAction: thisActionTokens,
+    sessionTotal: sessionStats.totalTokens,
+    snapshotsInSession: sessionStats.snapshots,
+    avgTokensPerSnapshot: sessionStats.snapshots > 0
+      ? Math.round(sessionStats.totalTokens / sessionStats.snapshots)
+      : 0,
+  };
+}
 
 // ─── 頁面注入腳本 ────────────────────────────────────────────
 
@@ -676,17 +783,20 @@ async function extractInteractive(
 
   url = data.url;
   const title = data.title;
+  const allRawElements = data.elements;
 
-  // Check previous snapshot for incremental mode
+  // Check previous snapshot for incremental mode (Level 1: URL-level)
   const prev = prevSnapshots.get(url);
   let incrementalMode = false;
-  let changedElements = data.elements.length;
+  let domainIncrementalMode = false;
+  let changedElements = allRawElements.length;
 
-  // Prune elements
-  const { elements, truncated, truncatedPercent, totalElements } = pruneElements(data.elements, maxTokens);
+  // Prune elements (default path)
+  const { elements, truncated, truncatedPercent, totalElements } = pruneElements(allRawElements, maxTokens);
 
   const lines: string[] = [];
 
+  // Level 1: URL-level incremental (same URL)
   if (useIncremental && prev && prev.url === url) {
     const inc = computeIncremental(elements, prev);
     if (inc.isIncremental) {
@@ -713,7 +823,40 @@ async function extractInteractive(
     }
   }
 
-  if (!incrementalMode) {
+  // Level 2: Domain-level incremental (different URL, same domain)
+  // Compare RAW elements (before pruning) to catch shared header/nav/footer
+  if (!incrementalMode && useIncremental) {
+    const domain = getDomain(url);
+    if (domain) {
+      const domainCache = domainCaches.get(domain);
+      if (domainCache && domainCache.lastURL !== url) {
+        const domInc = computeDomainIncremental(allRawElements, domainCache);
+        if (domInc.isDomainIncremental && domInc.sharedCount > 0) {
+          // Prune only the new (non-shared) elements
+          const { elements: prunedNew } = pruneElements(domInc.newElements, maxTokens);
+          domainIncrementalMode = true;
+          changedElements = prunedNew.length;
+
+          lines.push(`[頁面] ${title} (${url})`);
+          lines.push('---');
+          lines.push(`[域級增量 · ${domain} · ${domInc.sharedCount} 個共用元素省略 · ${prunedNew.length} 個新元素]`);
+
+          for (const el of prunedNew) {
+            lines.push(formatElement(el));
+          }
+
+          if (domInc.sharedCount > 0) {
+            lines.push(`[... ${domInc.sharedCount} 個元素與上一頁共用]`);
+          }
+          lines.push('---');
+          lines.push(`[${allRawElements.length} 個元素 · 域級增量模式]`);
+        }
+      }
+    }
+  }
+
+  // Level 3: Full snapshot (no incremental match)
+  if (!incrementalMode && !domainIncrementalMode) {
     lines.push(`[頁面] ${title} (${url})`);
     lines.push('---');
 
@@ -740,17 +883,24 @@ async function extractInteractive(
     timestamp: Date.now(),
   });
 
-  audit('SNAPSHOT', `interactive ${tokenCount}tokens${incrementalMode ? ' [incremental]' : ''}`);
+  // Update domain cache with ALL raw elements (not just pruned)
+  const domain = getDomain(url);
+  if (domain) {
+    updateDomainCache(domain, allRawElements, url);
+  }
+
+  const modeLabel = incrementalMode ? ' [incremental]' : domainIncrementalMode ? ' [domain-incremental]' : '';
+  audit('SNAPSHOT', `interactive ${tokenCount}tokens${modeLabel}`);
 
   return {
     tree,
     tokenCount,
-    truncated,
-    truncatedPercent: truncated ? truncatedPercent : undefined,
+    truncated: domainIncrementalMode ? false : truncated,
+    truncatedPercent: (truncated && !domainIncrementalMode) ? truncatedPercent : undefined,
     url,
     title,
-    elementCount: elements.length,
-    incrementalMode,
+    elementCount: domainIncrementalMode ? allRawElements.length : elements.length,
+    incrementalMode: incrementalMode || domainIncrementalMode,
     changedElements,
     rawElements: elements,
   };

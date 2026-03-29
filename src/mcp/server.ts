@@ -9,7 +9,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { connect, isConnected } from '../browser/connection.js';
-import { snapshot, getText, snapshotToJson, sessionStats } from '../dom/snapshot.js';
+import { snapshot, getText, snapshotToJson, sessionStats, getTokenCost } from '../dom/snapshot.js';
+import { estimateTokens } from '../utils/token-counter.js';
 import {
   click, typeText, scroll, navigate,
   goBack, goForward, selectOption, hover,
@@ -23,6 +24,7 @@ import {
   startCapture, stopCapture, getCapturedRequests, isCapturing,
 } from '../browser/network.js';
 import { executeAdapterCommand, listAdapters, loadBuiltinAdapters } from '../adapters/index.js';
+import { findBySemantics } from '../dom/semantics.js';
 import { audit, info } from '../utils/logger.js';
 
 // Session tracking
@@ -38,7 +40,7 @@ function uptimeStr(): string {
 export function createMcpServer(): McpServer {
   const server = new McpServer({
     name: 'wu-browser',
-    version: '1.1.0',
+    version: '1.2.0',
   });
 
   // ─── 輔助：取得當前 URL ──────────────────────────────────────
@@ -93,11 +95,12 @@ export function createMcpServer(): McpServer {
   }, async ({ mode, maxTokens, selector, outputFormat }) => {
     const result = await snapshot({ mode, maxTokens, selector });
     sessionStats.actions++;
+    const cost = getTokenCost(result.tokenCount);
     if (outputFormat === 'json') {
       const jsonResult = snapshotToJson(result, mode);
-      return { content: [{ type: 'text', text: JSON.stringify(jsonResult, null, 2) }] };
+      return { content: [{ type: 'text', text: JSON.stringify({ ...jsonResult, _tokenCost: cost }, null, 2) }] };
     }
-    return { content: [{ type: 'text', text: result.tree }] };
+    return { content: [{ type: 'text', text: `${result.tree}\n[_tokenCost: this=${cost.thisAction} session=${cost.sessionTotal} avg=${cost.avgTokensPerSnapshot}/snap]` }] };
   });
 
   server.registerTool('wu_get_text', {
@@ -127,6 +130,10 @@ export function createMcpServer(): McpServer {
     if (result.newTabId) msg += `\n  [New tab: ${result.newTabId}]`;
     if (result.success && !result.context) msg += '\n\nTake a new snapshot to see the updated page.';
 
+    const tokens = estimateTokens(result.context ?? '');
+    const cost = getTokenCost(tokens);
+    msg += `\n[_tokenCost: this=${cost.thisAction} session=${cost.sessionTotal}]`;
+
     return { content: [{ type: 'text', text: msg }] };
   });
 
@@ -139,7 +146,9 @@ export function createMcpServer(): McpServer {
     },
   }, async ({ ref, text, clear }) => {
     const result = await typeText(ref, text, { clear });
-    return { content: [{ type: 'text', text: result.context ?? result.message }] };
+    const tokens = estimateTokens(result.context ?? '');
+    const cost = getTokenCost(tokens);
+    return { content: [{ type: 'text', text: `${result.context ?? result.message}\n[_tokenCost: this=${cost.thisAction} session=${cost.sessionTotal}]` }] };
   });
 
   server.registerTool('wu_scroll', {
@@ -286,6 +295,32 @@ export function createMcpServer(): McpServer {
       const requests = getCapturedRequests();
       return { content: [{ type: 'text', text: JSON.stringify(requests, null, 2) }] };
     }
+  });
+
+  // ─── Semantic Find 工具 ──────────────────────────────────────────
+
+  server.registerTool('wu_find', {
+    description: 'Find elements by semantic meaning (role + name), not CSS selectors. Resilient to website updates. Take a snapshot first.',
+    inputSchema: {
+      role: z.string().optional().describe('Element role: button, link, textbox, combobox, etc.'),
+      name: z.string().optional().describe('Element name/label to search for'),
+      contains: z.string().optional().describe('Text the element name must contain'),
+      type: z.string().optional().describe('Input type (text, email, password, etc.)'),
+      near: z.string().optional().describe('Find elements near this element (by name)'),
+    },
+  }, async ({ role, name, contains, type, near }) => {
+    const result = await snapshot({ mode: 'interactive', maxTokens: 3000 });
+    if (!result.rawElements || result.rawElements.length === 0) {
+      return { content: [{ type: 'text', text: 'No elements found. Is a page loaded?' }] };
+    }
+    const matches = findBySemantics(result.rawElements, { role, name, contains, type, near });
+    if (matches.length === 0) {
+      return { content: [{ type: 'text', text: `No elements match query: role=${role ?? '*'} name=${name ?? '*'}` }] };
+    }
+    const lines = matches.slice(0, 10).map(m =>
+      `${m.ref} ${m.role} "${m.name}"${m.href ? ` href="${m.href}"` : ''}${m.type ? ` type=${m.type}` : ''} (score:${m.score})`
+    );
+    return { content: [{ type: 'text', text: lines.join('\n') }] };
   });
 
   // ─── Site Adapter 工具 ──────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 The missing browser layer for Claude. Read pages as DOM, not screenshots.
 
-**Incremental snapshot: 92% token reduction. Mini-snapshot after action: ~6 tokens.**
+**Incremental snapshot: 92% token reduction. Mini-snapshot after action: ~17 tokens.**
 
 ## Why Wu Browser?
 
@@ -10,7 +10,7 @@ The missing browser layer for Claude. Read pages as DOM, not screenshots.
 |---------|--------------|------------|
 | Token waste | 2,000-10,000 tokens/page | ~858 tokens (Google homepage) |
 | Repeated snapshots | Full page every time | Incremental: 858 → 72 tokens (92% savings) |
-| Blind after action | Need full re-snapshot | Auto mini-snapshot: ~6 tokens |
+| Blind after action | Need full re-snapshot | Auto mini-snapshot: ~17 tokens |
 | No safety guardrails | Full trust or full block | 4-level permission system |
 | No structured output | Text only | `--json` + `--jq` filtering |
 
@@ -24,7 +24,7 @@ wu-browser snap -i         # See the page (~858 tokens)
 wu-browser click @e3       # Click an element
 ```
 
-## One-Minute Demo: Google Search in 1,164 Tokens
+## One-Minute Demo: Same-Page Form Fill
 
 ```bash
 # Install
@@ -33,17 +33,17 @@ npm install -g wu-browser
 # Start Chrome (if not already running)
 wu-browser chrome
 
-# The workflow
+# The workflow — fill a form without ever re-reading the full page
 wu-browser nav https://google.com          # Navigate
-wu-browser snap -i                          # First read: 858 tokens
-wu-browser type @e10 "Wu AI"               # Type (mini-snapshot: 6 tokens)
-wu-browser snap -i                          # Incremental read: 72 tokens
-wu-browser click @e12                       # Click search (mini-snapshot: 6 tokens)
-wu-browser snap -i                          # New page read: ~858 tokens
-# Total: ~1,800 tokens for a complete search workflow
+wu-browser snap -i                          # First read: ~900 tokens
+wu-browser type @e10 "Wu AI"               # Type (mini-snapshot: ~17 tokens)
+wu-browser snap -i                          # Incremental read: 72 tokens (92% saved!)
+wu-browser type @e10 "more text"           # Type again (mini-snapshot: ~17 tokens)
+wu-browser snap -i                          # Incremental: 72 tokens again
+# Total: ~1,078 tokens for 5 interactions
 ```
 
-With any other tool, this would cost ~5,000+ tokens.
+With any other tool, every re-read costs ~1,000 tokens. Wu Browser: 72.
 
 ## MCP Integration (Claude Code)
 
@@ -77,33 +77,49 @@ Second snapshot of same page: **92% token reduction** (858 → 72 tokens)
 
 ### Mini-Snapshot after Action
 
-Automatic context after click/type: **~6 tokens**
+Automatic context after click/type: **~17 tokens** (same page) / **~35 tokens** (navigation)
 
 ```
-[動作完成] click @e10 → 頁面無變化
+[動作完成] click @e10 → 頁面無變化                          # ~17 tokens
+[動作完成] click @e3 → 導航到 https://mail.google.com/...   # ~35 tokens
 ```
 
 ## Real-World Workflow Cost
 
-A typical 5-step agent workflow: open page → read → click → read → fill form → read → submit.
+### Scenario A: Same-Page Workflow (form filling, scrolling)
 
 | Step | Traditional Tool | Wu Browser | Savings |
 |------|-----------------|------------|---------|
-| 1. First snapshot | ~1,000 tokens | 858 tokens | 14% |
-| 2. Click + re-read | ~1,000 tokens | 6 + 72 = 78 tokens | 92% |
-| 3. Type + re-read | ~1,000 tokens | 6 + 72 = 78 tokens | 92% |
-| 4. Click + re-read | ~1,000 tokens | 6 + 72 = 78 tokens | 92% |
-| 5. Final read | ~1,000 tokens | 72 tokens | 93% |
-| **Total** | **~5,000 tokens** | **~1,164 tokens** | **77%** |
+| 1. First snapshot | ~1,000 tokens | ~900 tokens | 10% |
+| 2. Type + re-read | ~1,000 tokens | 17 + 72 = 89 tokens | 91% |
+| 3. Type + re-read | ~1,000 tokens | 17 + 72 = 89 tokens | 91% |
+| 4. Type + re-read | ~1,000 tokens | 17 + 72 = 89 tokens | 91% |
+| 5. Submit + re-read | ~1,000 tokens | 17 + 72 = 89 tokens | 91% |
+| **Total** | **~5,000 tokens** | **~1,256 tokens** | **75%** |
 
-The magic: incremental snapshots (92% reduction) + mini-snapshots (~6 tokens after every action).
-No other browser tool does this.
+### Scenario B: Cross-Page Workflow (search + navigate)
+
+| Step | Traditional Tool | Wu Browser | Savings |
+|------|-----------------|------------|---------|
+| 1. First snapshot | ~1,000 tokens | ~900 tokens | 10% |
+| 2. Type + re-read | ~1,000 tokens | 17 + 72 = 89 tokens | 91% |
+| 3. Click (navigate) + read new page | ~1,000 tokens | 35 + ~1,400 = 1,435 tokens | -44% |
+| 4. Click (navigate) + read new page | ~1,000 tokens | 35 + ~1,400 = 1,435 tokens | -44% |
+| **Total** | **~4,000 tokens** | **~3,859 tokens** | **4%** |
+
+**Where Wu Browser dominates**: Same-page repeated reads (form filling, monitoring, SPA navigation).
+Cross-page navigation savings come from mini-snapshots (~17-35 tokens vs full re-read).
+
+### Coming in v2.0: Domain-Level Incremental
+
+Cross-page snapshots within the same domain will only send changed elements.
+Same header/nav/footer won't be re-sent. Estimated savings: 40-60% on cross-page reads.
 
 ## Features
 
 - **DOM-based reading** — No screenshots, no vision models needed
 - **Incremental snapshots** — Only send what changed (92% savings)
-- **Mini-snapshots** — 6-token status after every action
+- **Mini-snapshots** — ~17-token status after every action
 - **4-level permissions** — Green/Yellow/Red/Black safety system
 - **Auto cookie consent** — Dismiss banners automatically
 - **JSON output** — Structured data with `--jq` filtering
@@ -189,17 +205,17 @@ wu-browser snap -i --json
 
 ## vs Other Tools
 
-| | Wu Browser | Claude-in-Chrome | Playwright MCP | bb-browser |
+| | Wu Browser | Playwright MCP | bb-browser | Browserbase |
 |---|---|---|---|---|
-| Single snapshot | ~858 tokens | ~500-800 | ~500-2000 | varies |
-| **5-step workflow** | **~1,164 tokens** | **~3,000-5,000** (estimated) | **~3,000-10,000** (estimated) | **~3,000-5,000** (estimated) |
-| Incremental snapshot | ✅ 92% savings | ❌ | ❌ | ❌ |
-| Mini-snapshot | ✅ ~6 tokens | ❌ | ❌ | ❌ |
-| Permission system | ✅ 4-level | ❌ | ❌ | ❌ |
-| Cookie auto-dismiss | ✅ | ❌ | ❌ | partial |
-| JSON + jq | ✅ | ❌ | ❌ | ✅ |
-| Platform adapters | 🔧 extensible | N/A | N/A | ✅ 36 |
-| Installation | `npm i -g` | Chrome extension | npm | npm |
+| Same-page re-read | **72 tokens (92% ↓)** | ~1,000 (full) | ~1,000 (full) | ~1,000 (full) |
+| Cross-page read | ~1,400 tokens | ~1,000-2,000 | varies | varies |
+| Action feedback | **17 tokens (mini)** | none | none | none |
+| Permission system | **4-level** | none | none | none |
+| Cookie auto-dismiss | ✅ | ❌ | partial | ❌ |
+| Adapters | 3 | N/A | 103 | N/A |
+| Anti-update resilience | semantic (role+name) | selector-based | eval injection | AI self-healing |
+| Installation | npm, zero-config | npm | npm + extension | API key + cloud |
+| Cost | free | free | free | paid |
 
 ## Architecture
 
@@ -237,7 +253,7 @@ Wu Browser 是為 Claude 設計的瀏覽器中間層。用 DOM 讀頁面，不�
 
 - **Token 節省**：Google 首頁僅 858 tokens（對比 Playwright MCP 2,000-5,000）
 - **增量快照**：同頁面第二次僅 72 tokens（節省 92%）
-- **操作後迷你快照**：點擊/輸入後自動回報狀態（~6 tokens）
+- **操作後迷你快照**：點擊/輸入後自動回報狀態（~17 tokens）
 - **四級權限**：綠/黃/紅/黑，保護敏感操作
 - **JSON 輸出**：支援 `--json` + `--jq` 過濾
 - **網路攔截**：透過 CDP Network domain 監控 HTTP 請求
