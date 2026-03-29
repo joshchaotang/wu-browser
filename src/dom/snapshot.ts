@@ -153,9 +153,21 @@ function getElementSkeleton(el: RawElement): string {
   return `${el.role}:${el.region ?? 'other'}`;
 }
 
+/** Check if two URLs differ only in query parameters */
+function isQueryOnlyChange(url1: string, url2: string): boolean {
+  try {
+    const a = new URL(url1);
+    const b = new URL(url2);
+    return a.origin === b.origin && a.pathname === b.pathname && a.search !== b.search;
+  } catch {
+    return false;
+  }
+}
+
 function computeStructuralDiff(
   currentEls: RawElement[],
-  cache: StructuralCache
+  cache: StructuralCache,
+  currentUrl?: string,
 ): {
   isStructural: boolean;
   added: RawElement[];
@@ -177,7 +189,10 @@ function computeStructuralDiff(
   }
 
   const similarity = matchCount / maxLen;
-  if (similarity < 0.7) return null;
+
+  // Lower threshold for pagination (same path, different query params)
+  const threshold = (currentUrl && isQueryOnlyChange(currentUrl, cache.url)) ? 0.5 : 0.7;
+  if (similarity < threshold) return null;
 
   // Structural match! Now find actual diffs
   const added: RawElement[] = [];
@@ -1018,7 +1033,7 @@ async function extractInteractive(
     if (domain) {
       const structCache = structuralCaches.get(domain);
       if (structCache && structCache.url !== url) {
-        const diff = computeStructuralDiff(elements, structCache);
+        const diff = computeStructuralDiff(elements, structCache, url);
         if (diff && diff.isStructural) {
           structuralMode = true;
           const totalChanges = diff.added.length + diff.changed.length;
