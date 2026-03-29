@@ -250,12 +250,16 @@ export function createMcpServer(): McpServer {
   // ─── 工具 ────────────────────────────────────────────────────
 
   server.registerTool('wu_screenshot', {
-    description: 'Take a screenshot (fallback — prefer wu_snapshot to save tokens)',
+    description: 'Take a screenshot (fallback — prefer wu_snapshot to save tokens). Use annotate=true to overlay ref labels for vision models.',
     inputSchema: {
       fullPage: z.boolean().default(false).describe('Capture full page'),
+      annotate: z.boolean().default(false).describe('Overlay ref labels on interactive elements'),
     },
-  }, async ({ fullPage }) => {
-    const base64 = await takeScreenshot({ fullPage });
+  }, async ({ fullPage, annotate }) => {
+    if (annotate) {
+      await snapshot({ mode: 'interactive', maxTokens: 3000 });
+    }
+    const base64 = await takeScreenshot({ fullPage, annotate });
     sessionStats.actions++;
     return {
       content: [{

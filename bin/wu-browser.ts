@@ -219,6 +219,30 @@ program
     process.exit(0);
   });
 
+// ─── screenshot ───────────────────────────────────────────────
+
+program
+  .command('screenshot [path]')
+  .description('Take a screenshot, optionally with ref annotations')
+  .option('--annotate', 'Overlay ref labels on interactive elements')
+  .option('--full', 'Capture full page')
+  .action(async (path: string | undefined, opts) => {
+    await ensureConnected();
+
+    // Need a snapshot first to populate __wuRefs
+    if (opts.annotate) {
+      await snapshot({ mode: 'interactive', maxTokens: 3000 });
+    }
+
+    const { takeScreenshot } = await import('../src/dom/actions.js');
+    const base64 = await takeScreenshot({ fullPage: opts.full, annotate: opts.annotate });
+
+    const outPath = path ?? `wu-screenshot-${Date.now()}.png`;
+    writeFileSync(outPath, Buffer.from(base64, 'base64'));
+    console.log(`Screenshot saved: ${outPath}${opts.annotate ? ' (annotated)' : ''}`);
+    process.exit(0);
+  });
+
 // ─── find ─────────────────────────────────────────────────────
 
 program

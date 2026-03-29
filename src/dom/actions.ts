@@ -355,16 +355,55 @@ export async function waitFor(selector: string, timeoutMs = 5000): Promise<Actio
   return { success: false, message: `Timeout waiting for ${selector}` };
 }
 
-export async function takeScreenshot(opts: { fullPage?: boolean; selector?: string } = {}): Promise<string> {
+export async function takeScreenshot(opts: { fullPage?: boolean; selector?: string; annotate?: boolean } = {}): Promise<string> {
   const client = await getClient();
-  const { Page } = client;
+  const { Page, Runtime } = client;
+
+  // If annotate, inject ref labels onto elements
+  if (opts.annotate) {
+    await Runtime.evaluate({
+      expression: `(function() {
+        var refs = window.__wuRefs;
+        if (!refs) return 0;
+        var container = document.createElement('div');
+        container.id = '__wu_annotations';
+        container.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:999999';
+        document.body.appendChild(container);
+
+        var count = 0;
+        for (var ref in refs) {
+          var el = refs[ref];
+          if (!el) continue;
+          try {
+            var rect = el.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) continue;
+            var label = document.createElement('span');
+            label.textContent = ref.replace('@', '');
+            label.style.cssText = 'position:fixed;background:rgba(220,38,38,0.85);color:white;font:bold 10px monospace;padding:1px 3px;border-radius:2px;z-index:999999;pointer-events:none;line-height:1.2;left:' + Math.round(rect.left) + 'px;top:' + Math.max(0, Math.round(rect.top - 14)) + 'px';
+            container.appendChild(label);
+            count++;
+          } catch(e) {}
+        }
+        return count;
+      })()`,
+      returnByValue: true,
+    });
+    await sleep(100);
+  }
 
   const result = await Page.captureScreenshot({
     format: 'png',
     ...(opts.fullPage ? { captureBeyondViewport: true } : {}),
   });
 
-  audit('SCREENSHOT', opts.selector ?? 'viewport');
+  // Remove annotations
+  if (opts.annotate) {
+    await Runtime.evaluate({
+      expression: `(function(){ var el = document.getElementById('__wu_annotations'); if(el) el.remove(); })()`,
+    });
+  }
+
+  audit('SCREENSHOT', `${opts.selector ?? 'viewport'}${opts.annotate ? ' [annotated]' : ''}`);
   return result.data; // base64
 }
 
