@@ -1,3 +1,39 @@
+# Wu Browser v1.1 實測報告
+
+---
+
+## v1.1 階段二：Adapter 實作
+
+測試日期：2026-03-29
+新增功能：
+- 3 個 site adapter (google, github, form-filler)
+- BrowserAPI 介面供 adapter 調用瀏覽器操作
+- `wu_site_command` MCP tool
+- 自動載入機制 (loadBuiltinAdapters)
+- adapter 單元測試 11 項
+
+### 階段二測試結果
+
+| # | 測試項 | 指令 | 結果 | 通過 |
+|---|--------|------|------|------|
+| 1 | adapter 列表 | `wu-browser site list` | 顯示 3 個 adapter (google, github, form) + 所有命令 | ✅ |
+| 2 | Google search | `wu-browser site run google/search "Wu AI browser automation"` | 返回 4 條結構化搜尋結果 JSON，含 title + url | ✅ |
+| 3 | GitHub repo | `wu-browser site run github/repo "anthropics/claude-code"` | 返回 repo 資訊：84k stars, 7.1k forks, 529 watching | ✅ |
+| 4 | 表單偵測 | Google 首頁跑 `wu-browser site run form/detect` | 找到 1 個搜尋框 (combobox "搜尋" @e10) | ✅ |
+| 5 | MCP adapter | `wu_site_command` tool 已註冊於 MCP server | 已實作，含 adapter="list" 功能 | ✅ |
+| 6 | build | `npm run build` | 通過 | ✅ |
+| 7 | test | `npm test` | 50/50 通過（含 11 個新 adapter 測試）| ✅ |
+
+備註：
+- Google search 使用直接 URL 導航（`/search?q=`），比互動方式更可靠
+- GitHub repo 不需登入即可取得公開 repo 的 stars/forks/watchers
+- form/detect 在 Google 首頁成功���到搜尋框
+- YouTube 影片時間碼已去重，只保留主結果
+
+**結論：全部 7 項通過，階段二完成。**
+
+---
+
 # Wu Browser v1.0 實測報告
 
 ---

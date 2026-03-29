@@ -7,7 +7,7 @@
  * Example: cp _template.ts twitter.ts
  */
 
-import type { SiteAdapter } from '../types.js';
+import type { SiteAdapter, BrowserAPI } from '../types.js';
 
 const adapter: SiteAdapter = {
   name: 'template',
@@ -16,8 +16,13 @@ const adapter: SiteAdapter = {
     {
       name: 'search',
       description: 'Search on this platform',
-      async execute(args, _page) {
+      async execute(args, browser) {
         const query = args.join(' ');
+        // Use browser API to interact with the page:
+        // await browser.navigate('https://example.com');
+        // const snap = await browser.snapshotJson();
+        // await browser.type(snap.elements[0].ref, query);
+        // await browser.click(snap.elements[1].ref);
         return { query, results: [] };
       },
     },

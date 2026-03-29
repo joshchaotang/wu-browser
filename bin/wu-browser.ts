@@ -28,6 +28,10 @@ import { click, typeText, navigate } from '../src/dom/actions.js';
 import { listTabs } from '../src/browser/session.js';
 import { startMcpServer } from '../src/mcp/server.js';
 import { startHttpServer } from '../src/http/server.js';
+import { loadBuiltinAdapters } from '../src/adapters/index.js';
+
+// Load adapters at startup
+await loadBuiltinAdapters();
 
 const SNAPSHOT_CACHE_PATH = '/tmp/wu-browser-snapshot-cache.json';
 
@@ -284,7 +288,7 @@ siteCmd
   .action(async (path: string, args: string[]) => {
     await ensureConnected();
     const { executeAdapterCommand } = await import('../src/adapters/index.js');
-    const result = await executeAdapterCommand(path, args, null);
+    const result = await executeAdapterCommand(path, args);
     if (result.success) {
       console.log(JSON.stringify(result.result, null, 2));
     } else {

@@ -22,6 +22,7 @@ import { checkPermission, approveYellowAction, extractDomain } from '../permissi
 import {
   startCapture, stopCapture, getCapturedRequests, isCapturing,
 } from '../browser/network.js';
+import { executeAdapterCommand, listAdapters, loadBuiltinAdapters } from '../adapters/index.js';
 import { audit, info } from '../utils/logger.js';
 
 // Session tracking
@@ -295,6 +296,40 @@ export function createMcpServer(): McpServer {
     }
   });
 
+  // ─── Site Adapter 工具 ──────────────────────────────────────────
+
+  server.registerTool('wu_site_command', {
+    description: 'Run a site adapter command. Use adapter="google", command="search", args=["query"]. Run with adapter="list" to see available adapters.',
+    inputSchema: {
+      adapter: z.string().describe('Adapter name (e.g. "google", "github", "form") or "list" to list adapters'),
+      command: z.string().optional().describe('Command name (e.g. "search", "repo", "detect")'),
+      args: z.array(z.string()).default([]).describe('Command arguments'),
+    },
+  }, async ({ adapter: adapterName, command: commandName, args: cmdArgs }) => {
+    if (adapterName === 'list') {
+      const adapters = listAdapters();
+      if (adapters.length === 0) {
+        return { content: [{ type: 'text', text: 'No adapters installed.' }] };
+      }
+      const text = adapters.map(a =>
+        `${a.name} (${a.domains.join(', ')})\n` +
+        a.commands.map(c => `  ${a.name}/${c.name} — ${c.description}`).join('\n')
+      ).join('\n\n');
+      return { content: [{ type: 'text', text }] };
+    }
+
+    if (!commandName) {
+      return { content: [{ type: 'text', text: `Missing command. Usage: adapter="${adapterName}", command="<command>"` }] };
+    }
+
+    const result = await executeAdapterCommand(`${adapterName}/${commandName}`, cmdArgs);
+    sessionStats.actions++;
+    if (result.success) {
+      return { content: [{ type: 'text', text: JSON.stringify(result.result, null, 2) }] };
+    }
+    return { content: [{ type: 'text', text: `Error: ${result.error}` }] };
+  });
+
   server.registerTool('wu_status', {
     description: 'Check Wu Browser status: Chrome connection, current tab, usage stats',
     inputSchema: {},
@@ -333,6 +368,9 @@ export function createMcpServer(): McpServer {
 
 export async function startMcpServer(): Promise<void> {
   const port = parseInt(process.env.WU_BROWSER_CHROME_PORT ?? '9222');
+
+  // Load built-in adapters
+  await loadBuiltinAdapters();
 
   // 嘗試連接 Chrome（允許失敗，後續工具呼叫會重試）
   try {
